@@ -1,0 +1,94 @@
+测试规范 (Testing Guidelines)
+
+摘要：本文件是本仓测试细则主文档；AGENTS.md 仅保留测试硬约束与入口命令。
+
+1. 文档定位与优先级
+
+- 本文件（docs/qa/tests_guideline.txt）是测试规范的详细单一事实源。
+- AGENTS.md 提供简版硬约束（TDD、提交前验证、复盘要求）。
+- 若细节执行口径冲突：
+  1) 先遵循 AGENTS.md 与 docs/rules/PROJECT_RULES.md 的流程硬约束；
+  2) 再按本文件执行具体测试策略。
+
+2. 适用范围
+
+请根据项目实际情况补充测试对象和模块列表。
+例如：
+- 核心业务逻辑模块
+- 数据处理与转换模块
+- 外部 API 集成模块
+- CLI / 入口脚本
+
+3. 测试组织与命名
+
+- 测试目录：tests/
+- 文件命名：test_*.py
+- 测试函数：test_*
+- 每个测试应可独立运行，不依赖执行顺序。
+- 新增功能必须补对应测试；修复 bug 必须先写能复现问题的失败用例。
+
+4. TDD 工作流（强约束）
+
+- RED：先写/补测试，确认失败。
+- GREEN：最小实现让测试通过。
+- REFACTOR：只做必要整理，保持行为不变。
+- 每轮改动后至少跑"改动相关测试集合"。
+
+5. 运行策略与命令
+
+5.1 基础收集
+
+- 全量收集（快速检查测试资产和导入可用性）：
+  pytest --collect-only -q
+
+5.2 常用定向回归
+
+请根据项目模块划分测试集合，例如：
+- 核心链路：pytest tests/test_core*.py -q
+- 数据处理：pytest tests/test_data*.py -q
+- 集成测试：pytest tests/integration/ -q
+
+5.3 单文件快速迭代
+
+- 当只改一个模块时，优先先跑对应单文件测试，再补跑同层级依赖测试。
+- 使用 --override-ini="addopts=" 可跳过默认 pytest 配置，仅跑指定用例。
+
+6. 变更-测试映射（建议）
+
+请补充本项目的"源文件 → 测试文件"映射表，例如：
+- src/core/engine.py → tests/test_engine.py
+- src/data/parser.py → tests/test_parser.py
+- scripts/build_report.py → tests/test_build_report.py
+
+7. 外部依赖隔离原则
+
+- 单元/组件测试默认不得依赖真实外部环境（真实数据库、真实 API、真实网络服务）。
+- 对外部 HTTP/WS 调用统一采用 mock/stub/fake 数据。
+- 集成测试（如需真实环境）应单独标记：
+  pytest -m integration tests/
+
+8. Schema 一致性与环境差异（通用原则）
+
+- 测试环境应尽可能使用和生产环境相同的初始化方式。
+- 如果测试用 ORM 自动建表而生产用 migration script，两者可能不一致。
+- 推荐：测试环境也跑 migration script，或添加 schema 一致性验证测试。
+- 禁止用 SQLite 替代生产数据库测试关键特性（类型约束、时区、事务隔离等差异会被掩盖）。
+
+9. 测试调试
+
+常用 pytest 命令行选项：
+- -s: 显示 print 和日志输出
+- -v / -vv: 详细/更详细模式
+- -k "expression": 运行匹配表达式的测试
+- test_file.py::test_function_name: 运行特定测试
+- --pdb: 失败时进入调试器
+- --durations=N: 显示最慢的 N 个测试
+- --ff: 先运行上次失败的测试
+- --lf: 只运行上次失败的测试
+
+10. 核心教训
+
+- TDD 是强约束，不是建议 — 未写测试不得提交实现代码。
+- 测试也是代码，保持清晰、简洁、可维护。
+- 测试通过不等于正确 — 如果测试环境和生产环境差异大，测试可能掩盖真实问题。
+- 每次 bugfix 必须补充回归测试 — 同一个 bug 不应该出现第二次。
