@@ -32,12 +32,14 @@ Take review findings from an external model, verify every claim against actual s
 ### Phase 2: Parallel multi-expert verification (3 agents)
 Each external finding is independently verified by 3 experts with different lenses. All findings are sent to all 3 agents simultaneously.
 
-**Agent 1 — Architect (架构师)**
+**Agent 1 — Architect (架构师)** — 完整角色定义见 `~/.claude/agents/architect.md`
 For each finding, verify from system-level perspective:
 - Is the claimed architectural/design flaw real? Read the module map and data flow.
 - Is the proposed fix compatible with existing architecture, or would it introduce coupling/complexity?
+- **Trade-off check**: Does the proposed fix introduce new trade-offs? Are they acceptable?
 - Is the performance/tradeoff concern backed by measurable evidence?
 - Would the fix require changes beyond the claimed scope?
+- **YAGNI check**: Is the proposed change solving a real problem or a hypothetical one?
 
 **Agent 2 — Code Review Expert (代码评审专家)**
 For each finding, verify from code-level perspective:

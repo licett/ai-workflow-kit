@@ -153,7 +153,7 @@ Uses the same Axis C + D checklist as the engineering panel (see below).
 
 #### Engineering panel checklists
 
-**Agent 1 — Architect (架构师)**
+**Agent 1 — Architect (架构师)** — 完整角色定义见 `~/.claude/agents/architect.md`
 
 *Axis A: Design rationality (设计合理性)*
 - Problem statement is clear with quantifiable before/after.
@@ -162,18 +162,20 @@ Uses the same Axis C + D checklist as the engineering panel (see below).
 - Dependencies between Packs have correct ordering.
 - Risk/rollback strategy exists for each Pack.
 - Sprint does not duplicate work from prior sprints (check carryover history).
-- Performance vs complexity tradeoff is explicit and justified.
+- Performance vs complexity tradeoff is **explicit and justified with trade-off analysis** (选了什么/放弃了什么/代价是什么).
 - Module boundary changes don't violate existing separation of concerns.
+- **Reversibility check**: 不可逆决策是否有充分验证支撑？可逆替代方案是否被考虑过？
 
 *Axis B: Technical route vs best practices (技术路线)*
-- Proposed approach aligns with existing architecture (check `polyinit/` module map).
+- Proposed approach aligns with existing architecture (check module map).
 - No reinvention of patterns already solved in the codebase.
 - Concurrency/async/network patterns follow established project conventions.
-- API usage matches `docs/research/polymarket-api/README.md` contracts.
+- API usage matches documented contracts.
 - Performance claims have measurable baselines and targets.
-- No over-engineering: YAGNI check on each deliverable.
+- **Anti-astronaut YAGNI check**: 每个抽象层/泛化/配置化是否有至少两个消费方？如果只有一个 → 过度设计.
 - Industry best practices are followed (cite specific patterns when relevant).
 - Risk mitigation strategy is proportional to impact (not under/over-engineered).
+- **Complexity justification**: 新引入的 pattern 是否匹配问题规模？最坏情况不引入会怎样？
 
 **Agent 2 — Code Review Expert (代码评审专家)**
 

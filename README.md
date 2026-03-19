@@ -279,10 +279,11 @@ ai-workflow-kit/
 │   ├── adversarial-cross-model-review/# 外部模型结论验证
 │   └── project-roadmap-research/      # 项目 roadmap 快照
 ├── agents/                            # Agent 角色定义（独立的专家角色）
-│   ├── reviewer-correctness.md        # 正确性专家（逻辑/回归/边界）
-│   ├── reviewer-security.md           # 安全性专家（验证/泄露/合同）
-│   ├── reviewer-performance.md        # 性能专家（复杂度/延迟/可读性）
-│   └── reviewer-qa-lead.md            # QA 负责人（测试/风险/上线判定）
+│   ├── architect.md                   # 架构师（设计合理性/trade-off/YAGNI/可逆性）
+│   ├── reviewer-correctness.md        # 正确性专家（逻辑/回归/状态机/边界）
+│   ├── reviewer-security.md           # 安全性专家（STRIDE/依赖链/密码学/验证）
+│   ├── reviewer-performance.md        # 性能专家（N+1/数据结构/I-O 模式/复杂度）
+│   └── reviewer-qa-lead.md            # QA 负责人（测试/风险/上线判定/否决权）
 ├── templates/                         # 独立模板文件（供参考）
 │   ├── pitfalls.md                    # 活跃坑位索引模板
 │   ├── pitfalls_archive_README.md     # 坑位归档目录说明
