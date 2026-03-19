@@ -223,11 +223,14 @@ Sprint 开工前的设计评审。自动检测 Sprint 类型（策略/工程/混
 ### Cross Review Gate
 
 多专家交叉代码审查 + 质量门禁：
-- 4 个并行 agent：正确性 / 安全性 / 性能 / QA
-- 交叉质疑过滤误报
+- **5 个并行 agent**：架构师 / 正确性 / 安全性 / 性能 / QA
+- 3 步交叉质疑过滤误报（架构师合并重复根因 → 代码专家质疑 QA → QA 质疑代码专家）
 - 输出 Pass / Conditional Pass / Fail + Release Readiness 判定
+- 架构师负责合并重复 findings，QA Lead 拥有否决权
 
-> **架构说明**：4 个专家角色各有独立的 agent 定义文件（`agents/reviewer-*.md`），包含精确的职责、审查维度、checklist、输出格式和行为准则。`cross-review-gate` SKILL.md 负责编排流程（spawn → 交叉质疑 → 汇总），agent 文件负责定义"每个专家是谁、怎么审"。QA Lead 拥有否决权。
+> **架构说明**：5 个专家角色各有独立的 agent 定义文件（`agents/*.md`），包含精确的职责、审查维度、checklist、输出格式和行为准则。`cross-review-gate` SKILL.md 负责编排流程（spawn → 交叉质疑 → 汇总），agent 文件负责定义"每个专家是谁、怎么审"。
+
+> **轻量替代**：小改动（单函数/单文件）用 `/code-review-expert` 做单人快速 review，不需要启动 5 专家。
 
 ### Sprint Close Auditor
 

@@ -1,6 +1,6 @@
 ---
 name: cross-review-gate
-description: Multi-expert cross-validated code review with quality gate. Spawns parallel review agents, cross-checks findings to filter false positives and impractical suggestions, then produces a final consolidated report. Use when the user wants a high-confidence, production-grade code review after completing fixes or before merging.
+description: Multi-expert cross-validated code review with quality gate. Spawns 5 parallel review agents (architect + correctness + security + performance + QA), cross-checks findings to filter false positives, then produces a final consolidated report. Use when the user wants a high-confidence, production-grade code review after completing fixes or before merging.
 ---
 
 # Cross Review Gate
@@ -23,52 +23,59 @@ Deliver a cross-validated, high-confidence code review by running multiple indep
 - Load `CLAUDE.md` for project constraints.
 - Load `docs/qa/pitfalls.md` recent entries for regression awareness.
 
-### Phase 2: Parallel independent review (4 agents)
-Spawn 4 agents in parallel. Each agent has an independent, precisely defined role (see `~/.claude/agents/` for full definitions):
+### Phase 2: Parallel independent review (5 agents)
+Spawn 5 agents in parallel. Each agent has an independent, precisely defined role (see `~/.claude/agents/` for full definitions):
 
 | Agent | 角色 | 定义文件 | 职责 |
 |-------|------|---------|------|
-| Agent 1 | 正确性专家 | `reviewer-correctness.md` | 逻辑 bug、回归、边界、数据流完整性 |
-| Agent 2 | 安全性专家 | `reviewer-security.md` | 输入验证、错误处理、资源泄露、API 合同 |
-| Agent 3 | 性能专家 | `reviewer-performance.md` | 算法复杂度、延迟、代码清晰度、可观测性 |
-| Agent 4 | QA 负责人 | `reviewer-qa-lead.md` | 测试设计、覆盖率、风险评估、上线判定 |
+| Agent 1 | 架构师 | `architect.md` | 模块边界、依赖方向、设计决策 trade-off、YAGNI、可逆性 |
+| Agent 2 | 正确性专家 | `reviewer-correctness.md` | 逻辑 bug、回归、状态机完整性、边界、数据流 |
+| Agent 3 | 安全性专家 | `reviewer-security.md` | STRIDE 威胁面、输入验证、依赖链、密码学、资源管理 |
+| Agent 4 | 性能专家 | `reviewer-performance.md` | 算法复杂度、N+1/I-O 模式、数据结构适配、可观测性 |
+| Agent 5 | QA 负责人 | `reviewer-qa-lead.md` | 测试设计、覆盖率、风险评估、回滚就绪、上线判定 |
 
-Spawn 方式：使用 Agent tool，`subagent_type` 指定对应 agent 名称（`reviewer-correctness` / `reviewer-security` / `reviewer-performance` / `reviewer-qa-lead`），prompt 中传入变更 diff、sprint 上下文和 pitfalls 信息。
+Spawn 方式：使用 Agent tool，`subagent_type` 指定对应 agent 名称，prompt 中传入变更 diff、sprint 上下文和 pitfalls 信息。
 
-所有 4 个 agent 使用统一的 `[Px][confidence]` finding 格式。Agent 4（QA Lead）额外输出 **Release Readiness** 判定，且拥有否决权。
+所有 5 个 agent 使用统一的 `[Px][confidence]` finding 格式（定义见 `code-review-expert.md`）。
+- Agent 1（架构师）额外关注 trade-off 显式化和 YAGNI 违反
+- Agent 5（QA Lead）额外输出 **Release Readiness** 判定，且拥有**否决权**
 
 ### Phase 3: Cross-examination (adversarial mutual review)
-After all 4 agents complete, run adversarial cross-review in 2 steps:
+After all 5 agents complete, run adversarial cross-review in 3 steps:
 
-**Step 1: Grouped mutual cross-review**
+**Step 1: Architect reviews all other agents' findings**
+Spawn an agent with the architect perspective. Input: all findings from Agents 2-5.
+For each finding, evaluate:
+- Is the proposed fix compatible with existing architecture, or would it introduce unnecessary coupling/complexity?
+- Does the fix violate YAGNI — is it solving a real problem or a hypothetical one?
+- Are multiple findings pointing to the same root cause? If so, consolidate.
+Output: `Agree` / `Dispute (evidence)` / `Consolidate with Fx` per finding.
 
-Group agents into two camps and run cross-review between them:
-
-*Code Experts (Agents 1-3) review QA Lead's findings:*
-Spawn an agent with the combined code-expert perspective. Input: all findings from QA Lead (Agent 4).
+**Step 2: Code Experts (Agents 2-4) review QA Lead's findings**
+Spawn an agent with the combined code-expert perspective. Input: all findings from QA Lead (Agent 5).
 For each QA finding, evaluate:
 - Is the claimed test gap real? Check whether the test already exists or the scenario is covered implicitly.
 - Is the risk assessment proportional, or is it inflated?
 - Is the suggested test addition practical and non-redundant?
 Output: `Agree` / `Dispute (evidence)` per finding.
 
-*QA Lead reviews Code Experts' findings:*
-Spawn an agent with the QA Lead perspective. Input: all findings from Agents 1-3.
-For each code finding, evaluate:
+**Step 3: QA Lead reviews Code Experts' + Architect's findings**
+Spawn an agent with the QA Lead perspective. Input: all findings from Agents 1-4.
+For each finding, evaluate:
 - Is this issue testable? If so, why didn't existing tests catch it?
 - Is the blast radius correctly assessed?
 - Does the fix introduce new risk that needs test coverage?
 - Is this a ship-blocker or can it be deferred?
 Output: `Agree` / `Dispute (evidence)` / `Ship-blocker` per finding.
 
-**Step 2: Consolidation and classification**
+**Step 4: Consolidation and classification**
 After cross-reviews complete, classify each finding:
 
 For each finding, verify:
 1. **Source code evidence**: Does the cited `file:line` actually contain the claimed issue? Read the code.
 2. **Reproducibility**: Can the issue be triggered in realistic conditions, or is it purely theoretical?
 3. **Practicality**: Is the suggested fix achievable within project constraints and conventions?
-4. **Duplication**: Is this finding already covered by another finding at higher severity?
+4. **Duplication**: Is this finding already covered by another finding at higher severity? Did the architect consolidate it?
 5. **False positive check**: Does the reviewer misunderstand project-specific patterns (e.g., conventions documented in CLAUDE.md)?
 
 Classification:
@@ -85,7 +92,7 @@ Classification:
 ## 评审范围
 - 变更文件: N files
 - Sprint 上下文: sprintN (if applicable)
-- 评审专家: 4 agents (correctness, security, performance, QA lead)
+- 评审专家: 5 agents (architect, correctness, security, performance, QA lead)
 
 ## 复核结论: [Pass / Conditional Pass / Fail]
 - Pass: 无 Confirmed P0/P1，QA Lead 判定可上线
@@ -95,19 +102,20 @@ Classification:
 ## 专家视角摘要
 | 专家 | 焦点 | 发现数 | 最高严重度 |
 |------|------|--------|-----------|
-| 正确性专家 | 逻辑/回归/边界 | N | Px |
-| 安全性专家 | 验证/并发/泄露 | N | Px |
-| 性能专家 | 复杂度/延迟/可观测 | N | Px |
-| QA 负责人 | 测试设计/风险/上线 | N | Px |
+| 架构师 | 模块边界/设计决策/YAGNI | N | Px |
+| 正确性专家 | 逻辑/回归/状态机/边界 | N | Px |
+| 安全性专家 | STRIDE/验证/依赖链/密码学 | N | Px |
+| 性能专家 | 复杂度/N+1/数据结构/I-O | N | Px |
+| QA 负责人 | 测试设计/风险/上线判定 | N | Px |
 
 ## Confirmed Findings（已确认，必须处理）
-- [P1][0.92][2/4 agents] 标题 — file:line
+- [P1][0.92][3/5 agents] 标题 — file:line
   影响: ...
   建议: ...
-  复核依据: Agent1 + Agent3 独立发现，源码验证通过
+  复核依据: Agent2 + Agent4 独立发现，Architect 确认非过度设计
 
 ## Likely Valid（建议处理）
-- [P2][0.78][1/4 agents] 标题 — file:line
+- [P2][0.78][1/5 agents] 标题 — file:line
   影响: ...
   复核依据: 源码证据存在，影响待运行时确认
 
@@ -119,6 +127,12 @@ Classification:
 - 标题: ...
   原因: 修复成本超出收益，可作为技术债记录
 
+## 架构评审: 设计决策质量
+- 模块边界评估: ...
+- 依赖方向: ...
+- Trade-off 识别: ...
+- YAGNI 违反: [有/无]
+
 ## QA 评审: 测试设计质量
 - 测试覆盖率评估: ...
 - 缺失的测试场景: ...
@@ -127,6 +141,7 @@ Classification:
 
 ## QA 评审: Release Readiness（上线就绪判定）
 - 上线判定: [Ready / Conditional / Block]
+- 证据摘要: ...
 - 爆炸半径: ...
 - 失败模式与监控: ...
 - 回滚可行性: ...
@@ -137,6 +152,7 @@ Classification:
 |------|------|
 | 原始 findings 总数 | N |
 | 交叉复核后 Confirmed | N |
+| 架构师合并 (consolidated) | N |
 | 驳回 (false positive) | N |
 | 驳回率 | N% |
 
@@ -157,12 +173,13 @@ Classification:
 - Do not suppress findings to appear positive. Honesty over optimism.
 - Cross-examination must actually read source code, not just compare finding titles.
 - If agents disagree, present both perspectives rather than silently picking one.
+- Architect's consolidation must preserve the highest severity among merged findings.
 - Keep scope to the review target; avoid unrelated architecture commentary.
 
 ## Integration with existing skills
-- Agents 1-3 internally invoke `code-review-expert` skill conventions.
-- Agent 4 (QA Lead) uses the same finding format but adds release readiness assessment.
+- All 5 agents follow the `[Px][confidence]` format defined in `code-review-expert.md`.
+- Agent 5 (QA Lead) has veto power — Block verdict overrides all other signals.
+- Agent 1 (Architect) serves as consolidator in Phase 3, merging duplicate root causes.
 - Findings format is compatible with `sprint-close-auditor` for direct consumption.
-- QA Lead's release verdict feeds directly into the quality gate decision.
 - Confirmed P0/P1 items should be tracked in `docs/qa/pitfalls.md` per CLAUDE.md rules.
 - QA Lead's missing test scenarios can feed into `tdd-loop-executor` for next iteration.
