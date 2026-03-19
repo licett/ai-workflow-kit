@@ -227,7 +227,7 @@ Sprint 开工前的设计评审。自动检测 Sprint 类型（策略/工程/混
 - 交叉质疑过滤误报
 - 输出 Pass / Conditional Pass / Fail + Release Readiness 判定
 
-> **架构说明**：4 个角色的定义（职责、checklist、输出格式）全部内联在 `skills/cross-review-gate/SKILL.md` 中，不依赖外部 agent 文件。Claude Code 通过 Agent tool 动态 spawn subagent，由 SKILL.md 的 workflow 描述驱动角色分配。`sprint-design-reviewer` 和 `adversarial-cross-model-review` 的多专家面板也采用同样的架构。
+> **架构说明**：4 个专家角色各有独立的 agent 定义文件（`agents/reviewer-*.md`），包含精确的职责、审查维度、checklist、输出格式和行为准则。`cross-review-gate` SKILL.md 负责编排流程（spawn → 交叉质疑 → 汇总），agent 文件负责定义"每个专家是谁、怎么审"。QA Lead 拥有否决权。
 
 ### Sprint Close Auditor
 
@@ -278,6 +278,11 @@ ai-workflow-kit/
 │   ├── spec-arch-adapter/             # 文档骨架生成器
 │   ├── adversarial-cross-model-review/# 外部模型结论验证
 │   └── project-roadmap-research/      # 项目 roadmap 快照
+├── agents/                            # Agent 角色定义（独立的专家角色）
+│   ├── reviewer-correctness.md        # 正确性专家（逻辑/回归/边界）
+│   ├── reviewer-security.md           # 安全性专家（验证/泄露/合同）
+│   ├── reviewer-performance.md        # 性能专家（复杂度/延迟/可读性）
+│   └── reviewer-qa-lead.md            # QA 负责人（测试/风险/上线判定）
 ├── templates/                         # 独立模板文件（供参考）
 │   ├── pitfalls.md                    # 活跃坑位索引模板
 │   ├── pitfalls_archive_README.md     # 坑位归档目录说明

@@ -49,8 +49,29 @@ for skill in "${SKILLS[@]}"; do
   ((installed++))
 done
 
+# --- Install agent definitions ---
+AGENTS_SRC="$SCRIPT_DIR/agents"
+AGENTS_DST="${HOME}/.claude/agents"
+
+agents_installed=0
+if [ -d "$AGENTS_SRC" ]; then
+  mkdir -p "$AGENTS_DST"
+  for agent_file in "$AGENTS_SRC"/*.md; do
+    [ -f "$agent_file" ] || continue
+    agent_name="$(basename "$agent_file")"
+    dst="$AGENTS_DST/$agent_name"
+    if [ -f "$dst" ]; then
+      echo "  UPDATE  agent: $agent_name"
+    else
+      echo "  INSTALL agent: $agent_name"
+    fi
+    cp "$agent_file" "$dst"
+    ((agents_installed++))
+  done
+fi
+
 echo ""
-echo "Done: $installed skills installed, $skipped skipped."
+echo "Done: $installed skills installed, $agents_installed agents installed, $skipped skipped."
 echo ""
 echo "Next steps:"
 echo "  1. cd <your-project>"

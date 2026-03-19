@@ -24,31 +24,18 @@ Deliver a cross-validated, high-confidence code review by running multiple indep
 - Load `docs/qa/pitfalls.md` recent entries for regression awareness.
 
 ### Phase 2: Parallel independent review (4 agents)
-Spawn 4 agents in parallel, each with a distinct role and focus lens:
+Spawn 4 agents in parallel. Each agent has an independent, precisely defined role (see `~/.claude/agents/` for full definitions):
 
-**Agent 1 — Correctness & Regression (代码评审专家-正确性)**
-Focus: logic bugs, regressions against sprint DoD, edge cases, data flow integrity.
-Checklist: behavioral change is intentional, error paths are reachable, state transitions are complete.
+| Agent | 角色 | 定义文件 | 职责 |
+|-------|------|---------|------|
+| Agent 1 | 正确性专家 | `reviewer-correctness.md` | 逻辑 bug、回归、边界、数据流完整性 |
+| Agent 2 | 安全性专家 | `reviewer-security.md` | 输入验证、错误处理、资源泄露、API 合同 |
+| Agent 3 | 性能专家 | `reviewer-performance.md` | 算法复杂度、延迟、代码清晰度、可观测性 |
+| Agent 4 | QA 负责人 | `reviewer-qa-lead.md` | 测试设计、覆盖率、风险评估、上线判定 |
 
-**Agent 2 — Security & Reliability (代码评审专家-安全性)**
-Focus: input validation, error handling, concurrency safety, resource leaks, API contract compliance.
-Checklist: trust boundary enforcement, secret exposure, retry amplification, unsafe deserialization.
+Spawn 方式：使用 Agent tool，`subagent_type` 指定对应 agent 名称（`reviewer-correctness` / `reviewer-security` / `reviewer-performance` / `reviewer-qa-lead`），prompt 中传入变更 diff、sprint 上下文和 pitfalls 信息。
 
-**Agent 3 — Performance & Maintainability (代码评审专家-性能)**
-Focus: algorithmic complexity, latency impact, code clarity, observability.
-Checklist: N+1 patterns, unbounded loops, cache strategy, metric/log coverage.
-
-**Agent 4 — QA Lead (QA 负责人)**
-Focus: test design quality, test coverage completeness, risk assessment, and release readiness.
-Checklist:
-- *Test design*: Are test cases covering happy path, edge cases, error paths, and boundary conditions? Are test names descriptive and assertions specific (not just `assert result`)?
-- *Coverage gaps*: Are new/changed code paths covered by tests? Are regression tests present for bug fixes? Are integration-level tests present where unit tests alone are insufficient?
-- *Test anti-patterns*: Flaky tests (time-dependent, order-dependent), mocked-away core logic, tests that pass vacuously (assert True), overly broad fixtures.
-- *Risk assessment*: What is the blast radius of this change? What failure modes exist post-deploy? Are there monitoring/alerting gaps for the changed paths?
-- *Rollback readiness*: Can this change be safely reverted without data migration? Are feature flags or safe deployment guards in place for high-risk changes?
-- *Release verdict*: Based on all evidence, is this change safe to ship? Flag any "ship blocker" explicitly.
-
-Agents 1-3 use the `code-review-expert` skill conventions. Agent 4 (QA Lead) produces findings in the same `[Px][confidence]` format but additionally outputs a **Release Readiness** section.
+所有 4 个 agent 使用统一的 `[Px][confidence]` finding 格式。Agent 4（QA Lead）额外输出 **Release Readiness** 判定，且拥有否决权。
 
 ### Phase 3: Cross-examination (adversarial mutual review)
 After all 4 agents complete, run adversarial cross-review in 2 steps:
