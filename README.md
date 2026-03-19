@@ -279,6 +279,7 @@ ai-workflow-kit/
 │   ├── adversarial-cross-model-review/# 外部模型结论验证
 │   └── project-roadmap-research/      # 项目 roadmap 快照
 ├── agents/                            # Agent 角色定义（独立的专家角色）
+│   ├── code-review-expert.md          # 通用审查专家（全栈单人 review + 格式基准）
 │   ├── architect.md                   # 架构师（设计合理性/trade-off/YAGNI/可逆性）
 │   ├── reviewer-correctness.md        # 正确性专家（逻辑/回归/状态机/边界）
 │   ├── reviewer-security.md           # 安全性专家（STRIDE/依赖链/密码学/验证）
