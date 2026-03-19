@@ -71,6 +71,18 @@ python ~/.claude/skills/spec-arch-adapter/scripts/spec_arch_audit.py --root . --
 
 ### Step 3: 读完下面的方法论，开始用
 
+### 想直接看实战？
+
+跳到 **[完整实战示例](examples/end-to-end-walkthrough.md)** — 以一个 CSV 去重 CLI 工具为例，从零到交付完整走一遍 6 步流程：
+
+```
+初始化项目 → 写 Sprint 文档 → /sprint-design-reviewer（设计评审）
+    → /tdd-loop-executor（TDD 开发）→ /cross-review-gate（交叉审查）
+    → /sprint-close-auditor（收口审计）→ 提交
+```
+
+示例中包含：每一步你该输入什么、AI 会做什么、你会看到什么输出、以及遇到 bug 时 pitfalls 卡片怎么自动生成。
+
 ---
 
 ## 方法论详解
@@ -269,6 +281,7 @@ ai-workflow-kit/
 │   ├── pitfalls_archive_README.md     # 坑位归档目录说明
 │   └── sprint-template.md            # Sprint 文档模板
 └── examples/
+    ├── end-to-end-walkthrough.md      # 完整实战示例（推荐先读）
     └── workflow-diagram.md            # 流程图示例
 ```
 
