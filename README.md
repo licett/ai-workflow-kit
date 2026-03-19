@@ -227,6 +227,8 @@ Sprint 开工前的设计评审。自动检测 Sprint 类型（策略/工程/混
 - 交叉质疑过滤误报
 - 输出 Pass / Conditional Pass / Fail + Release Readiness 判定
 
+> **架构说明**：4 个角色的定义（职责、checklist、输出格式）全部内联在 `skills/cross-review-gate/SKILL.md` 中，不依赖外部 agent 文件。Claude Code 通过 Agent tool 动态 spawn subagent，由 SKILL.md 的 workflow 描述驱动角色分配。`sprint-design-reviewer` 和 `adversarial-cross-model-review` 的多专家面板也采用同样的架构。
+
 ### Sprint Close Auditor
 
 Sprint 收口审计：

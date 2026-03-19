@@ -50,7 +50,7 @@ for skill in "${SKILLS[@]}"; do
 done
 
 echo ""
-echo "Done: $installed installed, $skipped skipped."
+echo "Done: $installed skills installed, $skipped skipped."
 echo ""
 echo "Next steps:"
 echo "  1. cd <your-project>"
