@@ -1,0 +1,75 @@
+{
+  "_comment": "Claude Code hooks template — copy to ~/.claude/hooks.json or .claude/settings.json",
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "echo '[HOOK] 1. Python 命令前 source .venv/bin/activate 2. 调用 Codex 必须通过 scripts/codex-pair.sh send'"
+          }
+        ]
+      },
+      {
+        "_comment": "Block direct tmux commands — force use of codex-pair.sh wrapper",
+        "matcher": "Bash",
+        "if": "Bash(tmux paste-buffer:*)",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "echo '{\"decision\":\"block\",\"reason\":\"[BLOCKED] Use scripts/codex-pair.sh send instead of direct tmux commands.\"}'",
+            "statusMessage": "Blocking direct tmux..."
+          }
+        ]
+      },
+      {
+        "matcher": "Bash",
+        "if": "Bash(tmux load-buffer:*)",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "echo '{\"decision\":\"block\",\"reason\":\"[BLOCKED] Use scripts/codex-pair.sh send instead of direct tmux commands.\"}'",
+            "statusMessage": "Blocking direct tmux..."
+          }
+        ]
+      },
+      {
+        "matcher": "Bash",
+        "if": "Bash(tmux send-keys:*)",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "echo '{\"decision\":\"block\",\"reason\":\"[BLOCKED] Use scripts/codex-pair.sh send instead of direct tmux commands.\"}'",
+            "statusMessage": "Blocking direct tmux..."
+          }
+        ]
+      },
+      {
+        "_comment": "Session-end reflection before git commit",
+        "matcher": "Bash",
+        "if": "Bash(git commit:*)",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 -c 'import json; print(json.dumps({\"hookSpecificOutput\":{\"hookEventName\":\"PreToolUse\",\"additionalContext\":\"[SESSION-END] Before committing: 1) Update pitfalls.md if you hit bugs/reversals 2) Create/update skill if you found reusable methods 3) Write memory if you learned new constraints. If none apply, note: Session-end review: nothing to persist\"}}))'",
+            "statusMessage": "Session-end reflection..."
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "_comment": "Remind to search pitfalls after editing source code",
+        "matcher": "Edit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "jq -r '.tool_input.file_path // .tool_response.filePath // empty' | { read -r f; case \"$f\" in */src/*|*/lib/*|*/scripts/*) python3 -c 'import json; print(json.dumps({\"hookSpecificOutput\":{\"hookEventName\":\"PostToolUse\",\"additionalContext\":\"[PITFALL CHECK] You just modified source code. Search for related pitfalls: python3 -m scripts.qa.search <keywords> --scope pitfalls\"}}))' ;; *) echo '{}' ;; esac; }",
+            "statusMessage": "Checking pitfalls..."
+          }
+        ]
+      }
+    ]
+  }
+}

@@ -1,47 +1,62 @@
-# Sprint N: <标题>
+# Sprint N — <标题>
 
-## 背景与目标
+更新时间：YYYY-MM-DD
+状态：`DESIGN` / `ACTIVE` / `CLOSED`
+Owner：@user
+Sprint type：`engineering sprint` / `research sprint` / `production sprint`
 
-- 为什么要做这个 Sprint
-- 要达成的量化目标
+---
 
-## 非目标（不做什么）
+## 0. Sprint charter
 
-- 明确排除的范围
+- Sprint type：`research` / `engineering` / `production`
+- Close 时生产环境会改变什么：
+  - If pass：{具体变更}
+  - If fail：{冻结/降级/kill}
+- 若没有生产变更，本 Sprint 的成功定义是什么：{research close 口径}
+- Mainline hypothesis：{核心假设}
+- Mainline stop condition：{假设被证伪的条件 → 必须停止}
 
-## 前置条件
+---
 
-- 依赖的上游 Sprint 或外部条件
+## 1. Pack 列表
 
-## Pack 列表
+### Pack: <Pack 短名>
 
-### Pack: <Pack 1 短名>
+- Pack type：`research_only` / `runtime_translation` / `deploy_gate` / `production_change`
+- 状态：**TODO** / **DONE**
+- pass → production impact：{如果通过，生产改什么}
+- fail → kill/freeze impact：{如果失败，kill/freeze 什么}
 
-**背景/目标**:
+#### 目标
 - 要达成的量化结果
 
-**范围边界**:
-- 改哪些文件
-- 不做哪些事
+#### 范围边界
+- 改哪些文件 / 不做哪些事
 
-**DoD（完成标准）**:
-- [ ] 测试通过：`pytest tests/xxx/test_yyy.py::test_case`
-- [ ] 代码审查通过
+#### Truth / Proxy contract
+- truth source：{真实核验口径}
+- proxy source：{代理口径}
+- gap / bias / failure mode：{两者差距}
+
+#### DoD
+- [ ] {具体可验证条件}
+- [ ] 测试通过：`pytest tests/...`
 - [ ] 文档收口
 
-**指令与测试**:
+#### 指令与测试
 ```bash
-pytest tests/xxx/test_yyy.py::test_case -v
+python3 -m pytest tests/... -v
 ```
 
-**产物与路径**:
-- 报告：`data/reports/xxx.json`
+#### 产物与路径
+- `data/reports/...`
 
-**风险/回滚**:
+#### 风险/回滚
 - 已知问题：
 - 降级策略：
 
-**负责人/时间**:
+#### 负责人/时间
 - Owner: @user
 - ETA: YYYY-MM-DD
 
@@ -51,14 +66,20 @@ pytest tests/xxx/test_yyy.py::test_case -v
 
 （按相同模板填写）
 
-## Sprint Close 条件
+---
 
-- [ ] 所有 Pack DoD 满足
+## 2. Early-stop / split trigger
+
+- 每完成 3-4 个 Pack，回答：`Given what we know now, production changes what?`
+- 若答案是"什么都不改"，必须选择：`research close` / `split new sprint` / `continue with reason`
+- 若 mainline 已被 truth contract 证伪 → 默认 `split new sprint`
+
+---
+
+## 3. Close checklist
+
+- [ ] 所有 Pack DoD 满足（或 honest_negative close）
 - [ ] `docs/task/progress.md` 已更新
 - [ ] `docs/qa/pitfalls.md` 收口（新增/更新/归档）
 - [ ] 测试全绿
-
-## 风险与回滚
-
-- 整体风险评估
-- 回滚策略
+- [ ] Sprint type 一致性：research sprint 不能暗示"快可上线"
