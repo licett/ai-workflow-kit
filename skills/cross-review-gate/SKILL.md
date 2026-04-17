@@ -17,14 +17,29 @@ Deliver a cross-validated, high-confidence code review by running multiple indep
 
 ## Workflow
 
-### Phase 1: Scope determination
+### Phase 1: Scope determination & review tier selection
 - Run `git status` and `git diff` to identify changed files.
 - If sprint context is provided, load `docs/sprint/sprintN.md` for Pack scope and DoD.
 - Load `CLAUDE.md` for project constraints.
 - Load `docs/qa/pitfalls.md` recent entries for regression awareness.
+- **Determine review tier based on diff risk** (inspired by compound-engineering right-sizing):
 
-### Phase 2: Parallel independent review (5 agents)
-Spawn 5 agents in parallel. Each agent has an independent, precisely defined role (see `~/.claude/agents/` for full definitions):
+| Tier | 条件 | 审查配置 |
+|------|------|---------|
+| **Lite** | 纯新增文件 + 单一关注点 + 遵循现有模式 + 无 runtime/frozen 文件 | 1 agent（正确性专家快速扫描） |
+| **Standard** | 跨 2+ 文件、接口变更、中等风险 | 3 agents（正确性 + QA + 按 diff 选 1 个条件专家） |
+| **Full** | runtime / deploy / strategy / frozen core / 高 blast radius / 需要 GO/NO-GO | 全部 5 agents |
+
+**条件专家选择规则**（Standard tier 的第 3 个 agent）：
+- diff 涉及 API/接口/数据契约 → 架构师
+- diff 涉及认证/权限/密钥/外部输入 → 安全性专家
+- diff 涉及循环/查询/缓存/延迟敏感路径 → 性能专家
+- 不确定 → 架构师（最通用）
+
+**自动升级**：命中 pitfalls ACTIVE 卡片 → 至少 Standard；命中 frozen core 文件 → 强制 Full。
+
+### Phase 2: Parallel independent review (按 tier 配置)
+**Full tier** — Spawn 5 agents in parallel. Each agent has an independent, precisely defined role (see `~/.claude/agents/` for full definitions):
 
 | Agent | 角色 | 定义文件 | 职责 |
 |-------|------|---------|------|
@@ -175,6 +190,45 @@ Classification:
 - If agents disagree, present both perspectives rather than silently picking one.
 - Architect's consolidation must preserve the highest severity among merged findings.
 - Keep scope to the review target; avoid unrelated architecture commentary.
+
+## Method Discipline Overlay
+
+### Task-tier gate
+- Review target must be classified as `T1/T2/T3` before Phase 1.
+- Any review touching runtime core, deploy path, strategy mainline, frozen files, default config drift, or asking for `ship / merge / GO` is automatically `T3`.
+- Multi-file or contract-sensitive reviews are at least `T2`.
+
+### System-Wide Test Check（每个 finding 必须回答，Standard/Full tier 强制）
+对每个代码变更，审查 agent 必须回答以下 5 个问题（来自 compound-engineering 最佳实践）：
+1. **这段代码运行时会触发什么？** — callback / middleware / observer / event handler / signal
+2. **测试走的是真实链路还是 mock？** — 如果只测了 mock，标注为 `test_gap: integration_not_covered`
+3. **失败会留下孤儿状态吗？** — DB row / cache entry / file / 未清理的 position / 未关闭的连接
+4. **还有哪些接口暴露了这段逻辑？** — mixin / DSL / 其他调用方 / 替代入口
+5. **错误处理策略跨层一致吗？** — middleware + app + framework 的异常处理是否对齐
+
+如果任何问题的答案是"不确定"或"没测到"，必须产出对应的 finding。
+
+### Required 5-step review loop for each agent (`T2/T3` 强制)
+1. `read_signal` — 先读 diff / claim / sprint DoD，写 `observation`，不先下结论。
+2. `search_surface` — grep 同类 pattern、已有测试、文档约束、pitfalls 命中。
+3. `read_context` — 至少读命中点上下各 `50` 行；必要时追 `caller/callee` 各 `1` 跳。
+4. `verify_hypothesis` — 用源码、测试、日志、配置或 artifact 验证 finding。
+5. `reverse_hypothesis` — 主动验证"如果该 finding 是错的，最强反例是什么"。
+
+### Finding discipline
+- 没有 `file:line` / `doc:line` 证据的 finding 不得升为 `Confirmed`。
+- 只基于"看起来可能"或"通常应该"的 finding，降级为 `note` 或 `Likely valid`，不得报 `P1+`。
+- 对 bug-like finding 强制执行冰山法则：grep 同类 pattern，并在 finding 中写明 `same root cause? yes/no`。
+- 多个 finding 指向同一 contract break 时，必须按根因合并，只保留一个主 finding，列出受影响 callsites。
+- QA Lead 的 `Block` 必须写清：缺失的证据是什么、哪个命令 / 断言 / 日志可以解除 block、若不修复直接 ship 的 blast radius 是什么。
+
+### Output additions
+- 在最终报告中新增：
+  - `Task tier`
+  - `Evidence class` (`source_only` / `test_gap` / `runtime_gap` / `doc_gap`)
+  - `Reverse-hypothesis result`
+  - `Completion evidence required before GO`
+  - `Route recommendation`（仅当评审明确发现 `fake_done / no_search / spinning / low_context` 等 session 失败信号时填写）
 
 ## Integration with existing skills
 - All 5 agents follow the `[Px][confidence]` format defined in `code-review-expert.md`.

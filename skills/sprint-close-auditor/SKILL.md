@@ -39,13 +39,20 @@ Classify each finding as:
 - `P2` Medium drift (doc inconsistency, weak acceptance evidence)
 - `P3` Low cleanup
 
-### 5) Closeout output
+### 5) Rebuild pitfalls index (sprint close 时强制)
+```bash
+PYTHONPATH=. python3 scripts/build_pitfalls_index.py
+```
+新增的 archive 会被自动索引，下个 sprint 启动时 CC/Codex 检索更准确。
+
+### 6) Closeout output
 Return in this order:
 1. Sprint verdict: `Complete` / `Partial` / `Blocked`
 2. Completion matrix (task-by-task)
 3. Findings by severity with file/doc evidence
 4. Required actions to close sprint
 5. Residual risks
+6. **Compound knowledge**: 本 sprint 沉淀了哪些 solutions / 更新了哪些现有 solutions
 
 ## Safety rails
 - Do not mark sprint complete without evidence for code and tests.

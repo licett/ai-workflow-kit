@@ -20,6 +20,13 @@ Drive a predictable plan-and-deliver loop from open tasks to verified completion
 
 ## Workflow
 
+### 0) Sprint startup: rebuild pitfalls index + check solutions
+```bash
+PYTHONPATH=. python3 scripts/build_pitfalls_index.py
+```
+Then read `docs/qa/pitfalls_index.md` to identify relevant pitfalls for this sprint's scope.
+Also check `docs/solutions/` for reusable solutions from prior sprints.
+
 ### 1) Ask phase first (plan draft)
 - Read `CLAUDE.md`, mapped `docs/sprint/sprintN.md`, and `docs/task/progress.md` before code changes.
 - Define scope, non-goals, DoD, and evidence paths.

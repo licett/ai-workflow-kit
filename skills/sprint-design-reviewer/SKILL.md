@@ -347,3 +347,26 @@ Expert panel: [list of experts used]
 - Cross-examination must resolve disagreements transparently, not silently pick a side.
 - **Strategy panel safety**: Quant Strategist must not dismiss engineering concerns as "implementation detail"; Code Expert must not dismiss strategy concerns as "not my domain." Both domains matter.
 - **Risk Manager has veto power** on rollout safety — if Risk Manager says the wallet exposure is unacceptable, it must be addressed regardless of strategy attractiveness.
+
+## Execution-Readiness Overlay
+
+### Task-tier and Pack readiness
+- Sprint review must classify each Pack as `T1/T2/T3`。
+- Any Pack touching runtime core, deploy path, strategy admission, default config, or requiring `GO/NO-GO` is automatically `T3`。
+- For each `T2/T3` Pack, check the full 8-element contract：`WHY` / `WHAT` / `WHERE` / `HOW MUCH` / `TRUTH / PROXY` / `PITFALLS HIT` / `DONE` / `DON'T`。
+- Missing `DONE` or missing `TRUTH / PROXY` on a production-affecting Pack is at least a `P1` design finding。
+- Missing `PITFALLS HIT`、`WHERE` 或 `HOW MUCH` on a multi-module Pack is at least a `P2` doc-gap finding。
+
+### Reverse-hypothesis pass
+- For Pack ordering, explicitly ask: "如果把顺序反过来，closure capture / module boundary / testability 会更差还是更好？"
+- For refactor / migration Packs, explicitly test the opposite route。
+- For "先不动某核心方法"类方案，必须说明为什么这是 freeze，不是债务转移。
+
+### DoD audit
+- Every Pack must have at least one direct test oracle (`pytest ...`, diff oracle, report artifact path, runtime log/status oracle)。
+- "代码更干净 / 更易迁移 / 便于后续" 不算 DoD。
+- 设计评审必须区分：`design flaw` / `doc inconsistency` / `missing evidence gate` / `oversized pack`，不得混成一句泛评。
+
+### Output additions
+- 每个 Pack 额外输出：`execution_ready: yes/no` / `DoD_testable: yes/no` / `boundary_cut_ok: yes/no` / `size_realism: realistic / stretched / unrealistic` / `merge_or_split_advice`。
+- 总结 verdict 统一为 `GO / PARTIAL / NO-GO`，并单列"仅文档收口问题"与"真正实现风险"。

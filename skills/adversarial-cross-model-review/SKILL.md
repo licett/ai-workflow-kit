@@ -153,6 +153,35 @@ After cross-review, classify each finding based on expert consensus:
 - **不扩大战线**: 复核范围严格限定在外部模型提出的 findings，不主动发起新的 full review。
 - **尊重项目约定**: 先读 `CLAUDE.md` 和 `docs/qa/pitfalls.md`，避免因不了解项目约定而误判。
 
+## Reverse-Hypothesis Verification Overlay
+
+### Pre-check
+- Classify target as `T1/T2/T3` before verification。
+- Any external review affecting runtime, deploy, core files, or merge decision is automatically `T3`。
+- Read `AGENTS.md`、`docs/qa/pitfalls.md`、current sprint scope before verifying findings。
+
+### For each external finding, verify both the claim and the strongest alternative
+- claimed bug / risk is real
+- project convention was misread
+- cited file / line is stale or superseded
+- issue exists but root cause is different
+- existing test already covers it
+- finding is valid historically but out of scope for this change
+
+No finding may be `Adopt`ed unless：
+1. source evidence supports it, and
+2. a reverse-hypothesis attempt failed to falsify it。
+
+### Evidence discipline
+- `looks plausible` is not evidence
+- `external model cited line numbers` is not verification
+- `this is how we usually code` is not a rejection reason without contract or source evidence
+- runtime-only questions must be `Defer`, not `Adopt by plausibility`
+- if rejecting as `out_of_scope`, still state whether the claim appears valid elsewhere
+
+### Output additions
+- Per finding add：`Task tier` / `Evidence class` (`source_confirmed` / `source_contradicted` / `needs_runtime` / `doc_contract`) / `Reverse-hypothesis result` / `Adoption precondition` / `Same-root-cause siblings`
+
 ## Integration with existing skills
 - 如果 Adopt 的 findings 需要修复，修复后可用 `/cross-review-gate` 做最终验收。
 - 如果 Adopt 的 findings 涉及 bug，修复后需在 `docs/qa/pitfalls.md` 补复盘条目。
