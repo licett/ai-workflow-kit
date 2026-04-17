@@ -15,6 +15,7 @@ mkdir -p "$SKILLS_DST"
 
 SKILLS=(
   adversarial-cross-model-review
+  cc-codex-pair
   code-review-expert
   cross-review-gate
   log-rootcause-triage
