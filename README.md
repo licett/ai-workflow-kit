@@ -23,7 +23,7 @@
 ```
 ┌─────────────────────────────────────────────────┐
 │  Layer 3: Skills (自动化)                        │
-│  9 个 Claude Code Skill，覆盖设计→开发→审查→收口  │
+│  10 个 Claude Code Skill，覆盖设计→开发→审查→收口 │
 ├─────────────────────────────────────────────────┤
 │  Layer 2: Constraints (约束规则)                  │
 │  CLAUDE.md / AGENTS.md / PROJECT_RULES.md /     │
@@ -45,7 +45,7 @@
 # 克隆本仓库
 git clone <this-repo-url> /tmp/ai-workflow-kit
 
-# 一键安装 9 个通用 Skill 到 Claude Code
+# 一键安装 10 个通用 Skill 到 Claude Code
 bash /tmp/ai-workflow-kit/install.sh
 ```
 
@@ -185,6 +185,7 @@ rg -n "关键词" docs/qa/pitfalls_archive/
 | Sprint 结束，想确认是否可以关 | Sprint Close Auditor | `/sprint-close-auditor` |
 | 新项目，从零搭建文档骨架 | Spec Arch Adapter | `/spec-arch-adapter` |
 | 需要全局了解项目状态 | Project Roadmap Research | `/project-roadmap-research` |
+| 和 Codex 结对编程（CC+Codex） | CC-Codex Pair | `/cc-codex-pair` |
 
 ### 推荐的最小上手路径
 
@@ -263,6 +264,56 @@ Sprint 收口审计：
 
 只读的全局项目状态快照。扫描 CLAUDE.md + Sprint 文档 + 代码，输出架构图、数据流、风险清单。
 
+### CC-Codex Pair (NEW)
+
+跨模型结对编程：Claude Code (Opus) 当大脑，OpenAI Codex (GPT-5.4) 当双手，通过 tmux split-pane 实时协作。
+
+- **5 Phase workflow**: 设计 → 实现 → 交叉审查 → 修复 → 合并
+- **Consensus loop**: CONCEDE/INSIST/SPLIT，最多 5 轮，证据驱动
+- **核心原则**: 给 Codex 任务而非结论（实验验证：任务级 prompt 触发 agent 深度探索）
+- **安全机制**: CC 不得 kill Codex、不得当传声筒、不得跳过独立验证
+
+需要配合 `scripts/codex-pair.sh` 使用。详见 skill 内文档。
+
+---
+
+## 工具
+
+### 知识检索 (Knowledge Retrieval)
+
+FTS5 全文搜索，零外部依赖，覆盖项目文档 + CC auto-memory。
+
+```bash
+# 构建索引（pitfalls + sprint + progress + spec + memory）
+python3 -m scripts.qa.build_knowledge_db
+
+# 搜索
+python3 -m scripts.qa.search "关键词"
+python3 -m scripts.qa.search "关键词" --scope pitfalls --json
+
+# 质量回归测试
+python3 -m scripts.qa.golden_query_test
+```
+
+特性：
+- **双索引**: unicode61（英文标识符） + trigram（中文/模糊匹配）
+- **领域术语映射**: 中文概念 → 英文标识符（如"价格精度"→ tick_size）
+- **字段 boost**: 标题/标题/关键词 > 正文
+- **Miss log**: 搜索失败自动记录，数据驱动优化
+
+配置：`docs/spec/knowledge_query_aliases.json`（自定义术语映射）
+
+### CC-Codex 通信层
+
+tmux-based 的跨模型通信脚本，供 cc-codex-pair skill 使用：
+
+```bash
+scripts/codex-pair.sh send /tmp/prompt.txt  # 发送 prompt 到 Codex
+scripts/codex-pair.sh read 50               # 读取 Codex 最近 50 行输出
+scripts/codex-pair.sh alive                 # 检测 Codex 状态
+scripts/codex-pair.sh prewarm              # 创建 Codex pane
+```
+
 ---
 
 ## 文件结构
@@ -271,29 +322,40 @@ Sprint 收口审计：
 ai-workflow-kit/
 ├── README.md                          # 本文件（方法论手册）
 ├── install.sh                         # 一键安装脚本
-├── skills/                            # 9 个通用 Claude Code Skills
+├── skills/                            # 10 个通用 Claude Code Skills
 │   ├── sprint-design-reviewer/        # Sprint 设计评审
 │   ├── sprint-close-auditor/          # Sprint 收口审计
-│   ├── cross-review-gate/             # 多专家交叉 code review
+│   ├── cross-review-gate/             # 多专家交叉 code review（5 专家）
 │   ├── code-review-expert/            # 单轮深度 code review
 │   ├── tdd-loop-executor/             # TDD 循环执行器
 │   ├── log-rootcause-triage/          # 日志根因分析
 │   ├── spec-arch-adapter/             # 文档骨架生成器
 │   ├── adversarial-cross-model-review/# 外部模型结论验证
-│   └── project-roadmap-research/      # 项目 roadmap 快照
+│   ├── project-roadmap-research/      # 项目 roadmap 快照
+│   └── cc-codex-pair/                 # CC-Codex 跨模型结对编程 (NEW)
 ├── agents/                            # Agent 角色定义（独立的专家角色）
-│   ├── code-review-expert.md          # 通用审查专家（全栈单人 review + 格式基准）
-│   ├── architect.md                   # 架构师（设计合理性/trade-off/YAGNI/可逆性）
-│   ├── reviewer-correctness.md        # 正确性专家（逻辑/回归/状态机/边界）
-│   ├── reviewer-security.md           # 安全性专家（STRIDE/依赖链/密码学/验证）
-│   ├── reviewer-performance.md        # 性能专家（N+1/数据结构/I-O 模式/复杂度）
-│   └── reviewer-qa-lead.md            # QA 负责人（测试/风险/上线判定/否决权）
-├── templates/                         # 独立模板文件（供参考）
+│   ├── code-review-expert.md          # 通用审查专家
+│   ├── architect.md                   # 架构师
+│   ├── reviewer-correctness.md        # 正确性专家
+│   ├── reviewer-security.md           # 安全性专家
+│   ├── reviewer-performance.md        # 性能专家
+│   └── reviewer-qa-lead.md            # QA 负责人
+├── scripts/                           # 工具脚本 (NEW)
+│   ├── codex-pair.sh                  # CC-Codex tmux 通信 wrapper
+│   ├── codex-done-watcher.sh          # Codex 完成信号检测
+│   └── qa/                            # 知识检索工具
+│       ├── build_knowledge_db.py      # FTS5 索引构建
+│       ├── search.py                  # 搜索 CLI
+│       └── golden_query_test.py       # 质量回归测试
+├── templates/                         # 模板文件
+│   ├── AGENTS.md                      # 项目 AI 协作规则模板 (NEW)
+│   ├── ai-workflow.md                 # AI 工作流操作细则 (NEW)
+│   ├── hooks.json                     # Claude Code hooks 模板 (NEW)
+│   ├── sprint-template.md             # Sprint 文档模板（升级版）
 │   ├── pitfalls.md                    # 活跃坑位索引模板
-│   ├── pitfalls_archive_README.md     # 坑位归档目录说明
-│   └── sprint-template.md            # Sprint 文档模板
+│   └── pitfalls_archive_README.md     # 坑位归档目录说明
 └── examples/
-    ├── end-to-end-walkthrough.md      # 完整实战示例（推荐先读）
+    ├── end-to-end-walkthrough.md      # 完整实战示例
     └── workflow-diagram.md            # 流程图示例
 ```
 
@@ -344,7 +406,7 @@ A: `/cross-review-gate` 通常需要 1-3 分钟（4 个 agent 并行）。日常
 
 ## 致谢
 
-本工具包从 [polyinit](https://github.com/licett/polyinit) 项目的 42 个 Sprint 实战中提炼而来。其中的约束规则和 Skill 设计来自真实的生产踩坑经验。
+本工具包从 [polyinit](https://github.com/licett/polyinit) 项目的 100+ 个 Sprint 实战中提炼而来。其中的约束规则和 Skill 设计来自真实的生产踩坑经验。
 
 ---
 
