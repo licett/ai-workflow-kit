@@ -264,16 +264,15 @@ Sprint 收口审计：
 
 只读的全局项目状态快照。扫描 CLAUDE.md + Sprint 文档 + 代码，输出架构图、数据流、风险清单。
 
-### CC-Codex Pair (NEW)
+### CC-Codex Pair
 
-跨模型结对编程：Claude Code (Opus) 当大脑，OpenAI Codex (GPT-5.4) 当双手，通过 tmux split-pane 实时协作。
+跨模型结对编程：Claude Code (Opus) 当大脑，OpenAI Codex (GPT-5.4) 当双手，通过 vendored Codex app-server 客户端实时协作（无需 tmux / 屏幕抓取）。
 
 - **5 Phase workflow**: 设计 → 实现 → 交叉审查 → 修复 → 合并
 - **Consensus loop**: CONCEDE/INSIST/SPLIT，最多 5 轮，证据驱动
 - **核心原则**: 给 Codex 任务而非结论（实验验证：任务级 prompt 触发 agent 深度探索）
 - **安全机制**: CC 不得 kill Codex、不得当传声筒、不得跳过独立验证
-
-需要配合 `scripts/codex-pair.sh` 使用。详见 skill 内文档。
+- **传输层**: skill 内 `scripts/codex-companion.mjs` 经 Codex app-server 持久线程通信，`install.sh` 会一并部署，开箱即用
 
 ---
 

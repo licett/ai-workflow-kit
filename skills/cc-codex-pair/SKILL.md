@@ -1,12 +1,12 @@
 ---
 name: cc-codex-pair
-description: CC-Codex pair programming orchestrator. CC acts as brain (planning, reviewing, sprint design) and Codex acts as hands (implementation, final sign-off). Uses tmux split-pane for bidirectional communication. Codex runs interactively in the right pane (visible to user), CC communicates via scripts/codex-pair.sh. Every phase starts with context synchronization — both agents read the same code and docs before collaborating. Use when the user wants CC and Codex to collaborate on sprint design, code implementation, cross review, or merge decisions.
+description: CC-Codex pair programming orchestrator. CC acts as brain (planning, reviewing, sprint design) and Codex acts as hands (implementation, final sign-off). Communicates with Codex through a vendored Codex app-server client (codex-companion.mjs) over a persistent thread — no tmux, no screen-scraping. Every phase starts with context synchronization — both agents read the same code and docs before collaborating. Use when the user wants CC and Codex to collaborate on sprint design, code implementation, cross review, or merge decisions.
 ---
 
 # CC-Codex Pair
 
 ## Goal
-Orchestrate true pair programming between Claude Code (CC) and OpenAI Codex via tmux split-pane. Codex runs interactively in the right tmux pane — user sees everything in real-time. CC communicates via `scripts/codex-pair.sh send/read`. CC plans and reviews; Codex implements and has final say on implementation feasibility and merge readiness.
+Orchestrate true pair programming between Claude Code (CC) and OpenAI Codex through a vendored Codex app-server client. CC drives Codex via `node "$CXC" task ...`（持久线程，结构化结果，无 tmux/无抓屏）。CC plans and reviews; Codex implements and has final say on implementation feasibility and merge readiness.
 
 ## Core principles
 
@@ -23,7 +23,7 @@ Orchestrate true pair programming between Claude Code (CC) and OpenAI Codex via 
 ✅ ALWAYS: "我注意到 X 区域可能有问题，请你从零验证它是否真的存在，以及是否还有我没看到的问题" → 开放式验证
 ```
 
-Why: Codex runs interactively in the right tmux pane with full agent capabilities (read files, grep, git, run tests). But evaluation-style prompts cause it to skip exploration. Task-style prompts trigger autonomous exploration.
+Why: Codex runs as a full agent (read files, grep, git, run tests) via the app-server transport. But evaluation-style prompts cause it to skip exploration. Task-style prompts trigger autonomous exploration.
 
 **CC 的发现必须带不确定性**。CC 发现问题后发给 Codex 时，不能用"我确认了 X 是 bug"的语气，必须用"我怀疑 X 区域有问题，请你独立验证"的语气。让 Codex 从零建立自己的判断，而不是在 CC 的结论上盖章。
 
@@ -114,8 +114,8 @@ Any conclusion or recommendation → Codex must give AGREE/DISPUTE/PARTIAL。If 
 ## Trigger shortcuts
 
 ### Session 启动
-- `ccs <name>` 启动时自动创建 tmux 左 pane (CC) + 右 pane (Codex)。无需手动 prewarm。
-- 如果右 pane 意外关闭：`scripts/codex-pair.sh prewarm` 重建。
+- 无需 tmux/ccs，无需 prewarm。首次 `task --fresh` 自动起常驻 broker 并建线程。
+- 之后所有交互一律 `task --resume-last` 续同一线程。
 
 ### Sprint-bound (5 Phase workflow)
 - `/cc-codex-pair sN` — full sprint cycle (Phase 1-5)
@@ -124,7 +124,7 @@ Any conclusion or recommendation → Codex must give AGREE/DISPUTE/PARTIAL。If 
 - `/cc-codex-pair sN review` — Phase 3-4: cross review + fix loop
 - `/cc-codex-pair sN close` — Phase 5: final merge decision
 
-### Freeform (ad-hoc pair, 复用同一个 session)
+### Freeform (ad-hoc pair, 复用同一个线程)
 - `/cc-codex-pair chat <topic>` — open-ended discussion with Codex
 - `/cc-codex-pair review <target>` — ad-hoc review
 - `/cc-codex-pair investigate <issue>` — bug investigation / root cause analysis
@@ -133,23 +133,23 @@ Any conclusion or recommendation → Codex must give AGREE/DISPUTE/PARTIAL。If 
 - `让 codex review` — Chinese trigger for review
 
 ### Utility
-- `/cc-codex-pair status` — check Codex session status
+- `/cc-codex-pair status` — `node "$CXC" status` 查 Codex job 状态
 
-### Auto-prewarm rule
-如果 CC 执行任何 `/cc-codex-pair` 命令时发现当前会话还没有 Codex session，自动执行 `prewarm`。用户不需要手动 prewarm，除非想在开始工作前主动预热。
+### Auto-start rule
+首次需要 Codex 时直接 `task --fresh`，broker 自动拉起；之后一律 `--resume-last`。用户不需要手动起停。
 
 ## Workflow state persistence (防止中途丢失进度)
 
 **问题**：CC 在长 session 中上下文被压缩后，会忘记"我在跑 5 Phase 工作流的第几步"，导致中途停止。
 
-**解法**：工作流状态持久化到 ``scripts/codex-pair.sh state``。CC 在每个 Phase 开始和结束时更新此文件。如果 CC 中断/丢失上下文/用户说 "continue"，CC 读此文件恢复进度。
+**解法**：工作流状态持久化到 `./.cc-pair-state.json`（**项目根目录下、per-repo**，CC 用 Write/Edit 维护的纯文件，与 Codex job 状态无关；建议加入 .gitignore）。CC 在每个 Phase 开始和结束时更新此文件。如果 CC 中断/丢失上下文/用户说 "continue"，CC 读此文件恢复进度。
 
 **CRITICAL — CC 必须执行以下操作：**
 
 ### 每个 Phase 开始时
 ```bash
 # 读当前状态
-cat `scripts/codex-pair.sh state`
+cat ./.cc-pair-state.json
 # 更新为当前 Phase
 # 用 Edit tool 更新 phase, step, last_updated, phases_remaining
 ```
@@ -163,12 +163,12 @@ cat `scripts/codex-pair.sh state`
 ### CC 中断后恢复时（用户说 "continue" 或重新调用 `/cc-codex-pair sN`）
 ```bash
 # 方式 1: 读 state 文件
-cat `scripts/codex-pair.sh state`
+cat ./.cc-pair-state.json
 # 如果 active=true 且有 phases_remaining → 从中断的 Phase 继续
 
-# 方式 2: 读 ledger recovery packet（CCCC 思路 — 更可靠）
-scripts/codex-pair.sh recovery
-# 看最近 5 条 CC↔Codex 交互，快速理解断点在哪
+# 方式 2: 读 Codex job 历史（更可靠地看断点在哪）
+node "$CXC" status
+# 看最近 job 的 summary + Codex session-id，快速理解上次 Codex 干到哪
 ```
 
 ### 状态文件格式
@@ -182,14 +182,14 @@ scripts/codex-pair.sh recovery
   "last_updated": "2026-03-28T12:30:00",
   "phases_done": ["Phase 1: Design", "Phase 2: Implement"],
   "phases_remaining": ["Phase 3: Cross Review", "Phase 4: Fix", "Phase 5: Close"],
-  "codex_session": "cc-2e09b434",
+  "codex_thread": "019ec69e-bf86-7b33-8307-8a5dca128d2b (app-server thread, via --resume-last)",
   "notes": "Phase 2 completed 3 Packs. Codex raised 2 findings in Pack B."
 }
 ```
 
 ### 完成检查（防止中途停止）
 **CC 在每次回复用户前，必须检查**：
-1. 读 ``scripts/codex-pair.sh state``
+1. 读 `./.cc-pair-state.json`
 2. 如果 `active=true` 且 `phases_remaining` 不为空 → **CC 不得停止**，必须继续下一个 Phase
 3. 如果要暂停（等用户输入/Codex 超时），必须在回复中明确写出：`⏸️ 暂停原因: ... | 剩余: Phase 3, 4, 5 | 恢复方式: 说 "continue" 或重新调用 /cc-codex-pair s60`
 4. 只有 `phases_remaining` 为空或用户明确说"停"时，才能把 `active` 设为 `false`
@@ -206,7 +206,7 @@ scripts/codex-pair.sh recovery
 
 正确做法：
 ```
-✅ 继续工作。如果系统压缩了上下文，CC 读 cc-codex-pair-state.json 恢复进度，继续执行。
+✅ 继续工作。如果系统压缩了上下文，CC 读 `./.cc-pair-state.json` 恢复进度，继续执行。
 ✅ 如果压缩后丢失了关键信息，CC 从 sprint.md / progress.md / pitfalls.md 重新读取，不问用户。
 ```
 
@@ -233,91 +233,121 @@ scripts/codex-pair.sh recovery
 Map `sN` to `docs/sprint/sprintN.md` by default.
 
 ## Prerequisites check
-Must be running inside tmux (started via `ccs <name>`). Codex runs in the right tmux pane.
+Codex CLI 已安装且已登录即可。**不需要 tmux / ccs。**
 ```bash
-tmux display-message -p "#{session_name}" || echo "ERROR: not in tmux. Start with: ccs <name>"
-scripts/codex-pair.sh alive
+CXC="$HOME/.claude/skills/cc-codex-pair/scripts/codex-companion.mjs"
+command -v codex >/dev/null || echo "ERROR: codex 未安装 — npm install -g @openai/codex"
+test -f "$HOME/.codex/auth.json" || echo "ERROR: codex 未登录 — 运行: codex login"
+node "$CXC" setup   # 自检 Codex 是否就绪
 ```
 
-## Session model: 1 CC 会话 = 1 Codex session
+## Session model: 1 CC 会话 = 1 持久 Codex 线程
 
-**一个 CC 会话绑定一个 Codex session。** 无论是 sprint 迭代、freeform 讨论、review、调研 — 全部共用同一个 session。Codex 的生命周期和 CC 完全对齐。
+**一个 CC 会话绑定一个 Codex 线程（thread）。** 无论 sprint 迭代、freeform 讨论、review、调研 — 全部共用同一个线程。上下文由 Codex app-server 在协议层持久保存，靠 `--resume-last` 续接，不依赖任何常驻进程或 pane 保活。
 
-| | 数量 | 命名 | 生命周期 |
+| | 数量 | 实现 | 生命周期 |
 |--|------|------|---------|
-| Codex session | 1 per tmux session | 右 pane 的交互式 Codex 进程 | `ccs` 启动时自动创建，tmux session 结束时销毁 |
+| Codex 线程 | 1 per CC 会话 | app-server thread（thread-id 协议级持久）| 首次 `task --fresh` 创建；之后一律 `task --resume-last` 续接 |
+
+**核心规则**：**默认永远 `--resume-last` 累积上下文，仅在明确开启全新话题时才 `--fresh`。** 这比旧的 tmux 保活 pane 更可靠地实现"同一会话共享一份持久上下文" —— resume 是协议级的，不会因为进程/pane 状态而丢。
+
+**并发与隔离（多目录/多会话）**：
+- **按目录(repo)自动隔离**：broker、线程、jobs、workflow-state(`./.cc-pair-state.json`) 全部按工作目录隔离。**不同目录跑结对互不影响**，可放心并行。
+- **同一目录并发多个 CC 会话**：默认会共享该 repo 的"最近线程"（`--resume-last`/`status` 按 repo 范围解析），可能串台。若要彼此隔离，给每个会话在首次调用前设一个稳定唯一的会话标识：
+  ```bash
+  export CODEX_COMPANION_SESSION_ID="ccpair-$(date +%s)-$$"   # 每个 CC 会话固定一次，全程复用
+  ```
+  设了它，`--resume-last`/`status`/`result` 只认本会话自己的 jobs，不串台。
 
 **设计原则**：和你的 CC 长会话一样 — 丰富上下文出好代码。Codex 在 freeform 讨论中积累的项目理解，到 sprint 实现时直接可用；sprint review 中积累的代码理解，到后续讨论时仍然在。
 
-**不拆分 session** — 不按 sprint 拆、不按 Phase 拆、不按话题拆。一个 CC 会话里的所有 Codex 交互共享同一份持久上下文。
+**不拆分线程** — 不按 sprint 拆、不按 Phase 拆、不按话题拆。一个 CC 会话里的所有 Codex 交互共享同一份持久上下文。
 
-## Communication: tmux split-pane (NO acpx)
+## Communication: vendored codex-companion（NO tmux, NO 抓屏）
 
-**CC 和 Codex 通过 tmux 通信。Codex 在右 pane 交互式运行，用户实时可见。**
+**CC 通过 vendored 的 Codex app-server 客户端与 Codex 通信。** 调用 `codex-companion.mjs`，它经 Unix socket 上的 JSON-RPC 驱动一个常驻 broker，返回结构化结果。**没有 tmux，没有屏幕抓取，没有 `›`/`esc to interrupt` 轮询。**
 
-**CRITICAL RULE — CC 严禁使用 acpx。必须通过 tmux wrapper：**
+**路径约定**（CC 在每次调用前先设好这个变量）：
+```bash
+CXC="$HOME/.claude/skills/cc-codex-pair/scripts/codex-companion.mjs"
 ```
-❌ NEVER: acpx codex ...
-❌ NEVER: acpx sessions ...
-❌ NEVER: 任何 acpx 命令
-✅ ALWAYS: scripts/codex-pair.sh send /tmp/prompt.txt   # 发 prompt 到右 pane 的 Codex
-✅ ALWAYS: scripts/codex-pair.sh read [N]               # 读 Codex 最近 N 行输出
-✅ ALWAYS: scripts/codex-pair.sh alive                  # 检查 Codex 状态
-✅ ALWAYS: scripts/codex-pair.sh prewarm                # 创建 Codex 右 pane（如果还没有）
+命令在**用户当前项目目录**下运行（即 Codex 要操作的 repo）—— companion 默认把 cwd 当工作区，无需额外指定。
+
+**CRITICAL RULE — 只用 companion，严禁回退到 tmux / acpx / 抓屏：**
+```
+❌ NEVER: tmux / capture-pane / paste-buffer / 任何屏幕抓取
+❌ NEVER: acpx 任何命令
+✅ ALWAYS: node "$CXC" task --resume-last "<prompt>"   # 发任务给 Codex（续同一线程）
+✅ FIRST:  node "$CXC" task --fresh "<prompt>"          # 仅本会话首次接触用 --fresh
+✅ WRITE:  node "$CXC" task --resume-last --write "<spec>"  # 需要 Codex 改代码时加 --write
+✅ BG:     node "$CXC" task --background "<prompt>"     # 长任务后台跑，返回 jobId
+✅ POLL:   node "$CXC" status [jobId]                   # 查 job 状态
+✅ FETCH:  node "$CXC" result [jobId]                   # 取已完成 job 的最终输出
+✅ STOP:   node "$CXC" cancel [jobId]                   # 取消运行中的 job
 ```
 
 **工作原理**：
-1. 用户通过 `ccs <name>` 启动 → tmux 左 pane CC + 右 pane Codex（自动）
-2. CC 写 prompt 到文件 → `scripts/codex-pair.sh send /tmp/prompt.txt` → 通过 smux tmux-bridge 粘贴到右 pane
-3. 用户在右 pane 实时看到 Codex 的 thinking/tool calls/output
-4. CC 用 `scripts/codex-pair.sh read 50` 读 Codex 的回复（通过 tmux-bridge read）
-5. Codex 的 `›` 提示符表示回复完成，等待下一个 prompt
+1. CC 调 `node "$CXC" task ...` → companion 自动确保 broker 常驻（首次自动起，无需 prewarm）。
+2. broker 经 app-server 协议向 Codex 发一个 turn；read-only 默认（不带 `--write`）。
+3. **前台调用直接把 Codex 的最终回复打到 stdout** —— CC 读这个 stdout 即可，**不需要单独 read**。
+4. 每次调用是一个 turn；`--resume-last` 让所有 turn 落在同一 thread-id 上，上下文自然累积。
+5. `status` 给出 job 历史 + Codex session-id（`codex resume <id>` 可在 Codex CLI 重开同线程）。
 
-**用法**：
+**前台 vs 后台**：
 ```bash
-# 发 prompt（session 自动管理，CC 不需要操心）
-scripts/codex-pair.sh send /tmp/cc_codex_prompt.txt
+# 前台（默认）：阻塞到 Codex 返回，stdout 即回复。适合 Round 0、共识轮、短任务。
+node "$CXC" task --resume-last "$(cat /tmp/cc_codex_prompt.txt)"
 
-# 查看状态
-scripts/codex-pair.sh status
-
-# 关闭（仅在 sprint close 后或调试时使用）
-scripts/codex-pair.sh close
+# 后台：长实现/审查任务。立即返回 jobId，CC 继续干别的，事后用 status/result 取回。
+node "$CXC" task --background --resume-last "$(cat /tmp/cc_codex_prompt.txt)"
+# → "started in the background as task-xxxx. Check status task-xxxx for progress."
+node "$CXC" status task-xxxx --wait --json   # 阻塞到终态，读 .job.status（勿 grep 渲染文本）
+node "$CXC" result task-xxxx --json          # 读 .storedJob.result.rawOutput
 ```
 
-## Codex 活跃检测 & 动态超时
+## Codex 任务状态 & 后台轮询
 
-**问题**：固定超时无法区分"Codex 在干活"和"Codex 卡住了"。
+传输换成 app-server 协议后，**不再有 tmux 抓屏、`›`/`esc to interrupt` 轮询、信号文件、固定超时这套脆弱机械**。状态由协议事件直接给出：
 
-**方案**：CC 用 `run_in_background: true` 后台发送 prompt，不用 sleep 阻塞。Codex 完成时 CC 自动收到 task-notification。
+- **前台 `task`**：阻塞到该 turn 完成，stdout 即 Codex 回复。CC 直接读返回值，无需检测"忙/闲"。
+- **后台 `task --background`**：立即返回 jobId。CC 继续干别的，需要时：
+  ```bash
+  node "$CXC" status <jobId> --wait --json   # ★阻塞到终态再返回(免轮询/免 grep)，读 .job.status
+  node "$CXC" status <jobId> --json          # 单次查，读 .job.status
+  node "$CXC" result <jobId> --json          # 取最终输出，读 .storedJob.result.rawOutput
+  node "$CXC" cancel <jobId>                 # 取消运行中的 job
+  ```
+- **broker 生命周期**：首次 `task` 自动起常驻 broker，无需 `prewarm`；按 repo 隔离。会话结束后可让其自然退出或显式收尾，CC **不需要**手动起停。
+
+**CC 严禁用 while+sleep 轮询。** 前台调用天然阻塞到完成；后台**优先 `status <jobId> --wait --json`**（companion 内部按结构化状态阻塞到终态）。**没有静默挂起**：长任务走后台 + `--wait`，短任务前台直接拿结果。
+
+### ⚠️ 完成判定铁律：只认 JSON 状态字段，严禁 grep 渲染文本（新传输的 `›` 同类坑）
+
+**这是 2026-06-14 实战踩到的坑，等价于老 tmux 的 `›` 误判。**
+
+`node "$CXC" status` 的**人类可读输出里含 action 提示**：`/codex:cancel <id>`、`Resume in Codex: …`、`Result: /codex:result <id>`、`Cancel: …`。**对它 `grep cancel|done|completed|result` 必然误匹配**——把"还在 running 的 job"误判成"已完成/已取消"。
 
 ```
-CC 发 prompt（后台）:
-  Bash(scripts/codex-pair.sh send /tmp/prompt.txt, run_in_background=true)
-  → CC 继续做其他事（内部分析、读代码、回复用户）
-  → Codex 完成时 CC 收到 task-notification → 处理结果
-
-CC 或用户想检查 Codex 状态时:
-  scripts/codex-pair.sh alive
-  → IDLE (等待输入) / WORKING (处理中) / DEAD (pane 不在)
-
-如果 DEAD:
-  scripts/codex-pair.sh prewarm   (重建右 pane)
+❌ 死法: node "$CXC" status <id> | grep -qiE "completed|done|cancel" && echo done
+        → 命中的是输出里的 "/codex:cancel <id>" 提示，不是真状态。job 其实还在 running。
+✅ 正法: ST=$(node "$CXC" status <id> --json | jget job.status)   # 取结构化字段
+        case "$ST" in completed) ... ;; failed|cancelled) 判失败 ;; queued|running) 继续等 ;; esac
+✅ 更优: node "$CXC" status <id> --wait --json   # 直接阻塞到终态，连判定循环都不用写
 ```
 
-**CC 严禁用 while+sleep 轮询等待 Codex。** 用 `run_in_background` + `alive` 按需检查。
+**规则**：任何"Codex 完成了吗"的判断，**必须**取 `--json` 的 `.job.status` 精确比对终态枚举（`completed`/`failed`/`cancelled`），**绝不**对渲染文本做关键词匹配。`result` 也用 `--json` 读 `.storedJob.result.rawOutput`，不要 grep 渲染块。
 
-**`alive` 判断依据**（基于 Codex pane 的 `›` 提示符）：
-```
-IDLE    — Codex 的 › 提示符可见 → 等待输入，可以发下一个 prompt
-WORKING — 无 › 提示符 → Codex 在处理中
-DEAD    — pane 不存在 → 需要 prewarm
-```
+### 长任务完成通知（推荐姿势 — 真 push，免轮询、免漏读）
 
-**IMPORTANT: wrapper 内部实现说明（CC 不直接使用，仅供理解）**
-- `scripts/codex-pair.sh` 内部使用 smux `tmux-bridge` 通信：`tmux load-buffer + paste-buffer` 发 prompt，`tmux-bridge read` 读回复，`tmux-bridge name/resolve` 追踪 pane。
-- Codex 在右 tmux pane 以交互模式运行（`codex -a never`），用户实时可见。
-- CC 只需要：`send`（发 prompt）/ `read`（读回复）/ `alive`（查状态）/ `prewarm`（创建 Codex pane）。
+有两种"后台"，别混：
+| 方式 | 完成怎么得知 | 适用 |
+|--|--|--|
+| companion `task --background` | 返回 jobId，**CC 自己轮询 `status`/`result`**（结果落盘可重取，不会丢，但要 CC 记得查） | 任务要在 CC 关注之外长期存活 |
+| **Bash 工具 `run_in_background:true` 跑前台 `task`**（推荐） | 进程退出时 **harness 主动给 CC 推 task-notification**，CC 再读输出文件 | 绝大多数长任务 |
+
+**推荐**：长任务用 `Bash(node "$CXC" task --resume-last "...", run_in_background=true)`。这是对模型的**真异步推送**：CC 发完可以去干别的（准备下个 Pack、读代码、跑内部分析），Codex 一完成 harness 就把 CC 叫回来——**既不轮询、也不会忘记读**。本 skill 中"完成通知到达"指的就是这条 harness task-notification。
+
+**兜底（万一 CC 仍漏了）**：恢复时 `node "$CXC" status` 列出最近 job + 读 `./.cc-pair-state.json`，捞出未取结果的 job 用 `result <jobId>` 取回——结果一直在磁盘上，不会丢。
 
 ## Round 0: Context sync protocol
 
@@ -325,13 +355,13 @@ DEAD    — pane 不存在 → 需要 prewarm
 
 **核心原则：对等上下文 = 真正的结对编程。**
 - Codex 必须自己读 AGENTS.md、sprint.md、progress.md、pitfalls.md、源码 — 和 CC 新会话读的文件一模一样
-- Codex 在右 tmux pane 以交互模式运行，上下文在进程生命周期内自然保持
+- Codex 通过 app-server 持久线程运行，上下文在线程生命周期内由协议层保持（`--resume-last` 续接）
 - CC 只补充 3 类"代码里读不到的信息"：
   1. **历史决策 why**: "这段 chase 逻辑是 S21 加的，因为当时薄盘口 3x 超付"
   2. **踩坑经验**: "tick_size 升阶在 S22 被证明不合理，不要再用这个模式"
   3. **隐性约束**: "frozen denylist 里的文件不能改"、memory 条目中的关键信息
 
-**Step 0a**: CC 发 onboarding prompt 给右 pane 的 Codex（session 已由 `ccs` 自动创建）。
+**Step 0a**: CC 发 onboarding prompt 给 Codex（本会话首次接触用 `--fresh`，之后每个 Phase 的 Round 0 用 `--resume-last` —— 同一线程，Codex 已有前序上下文，onboarding 会更快）。
 ```bash
 cat > /tmp/cc_codex_prompt.txt << 'PROMPT'
 We are pair programming on Sprint {N}. Do your full onboarding — read these files carefully, just like a new team member would:
@@ -349,7 +379,7 @@ Take your time to read thoroughly. After reading, tell me:
 4. Which source files you think are most relevant and why
 PROMPT
 
-scripts/codex-pair.sh send /tmp/cc_codex_prompt.txt
+node "$CXC" task --resume-last "$(cat /tmp/cc_codex_prompt.txt)"
 ```
 
 Where `{phase_specific_files}` varies by Phase:
@@ -359,7 +389,7 @@ Where `{phase_specific_files}` varies by Phase:
 - **Phase 4 (Fix)**: same as Phase 3 + `7. Focus on the code sections cited in findings`
 - **Phase 5 (Close)**: `5. git diff --stat` + `6. Run: pytest (check test results)`
 
-**Step 0b**: CC 用 `scripts/codex-pair.sh read 100` 读 Codex 回复，评估理解，补充代码里读不到的信息。
+**Step 0b**: 前台 `task` 调用返回的 stdout 即 Codex 的 onboarding 回复；CC 直接读它，评估理解，补充代码里读不到的信息。
 
 CC 评估 Codex 的 onboarding 输出：
 - 理解准确 → CC 补充历史上下文后进入正式协作
@@ -415,7 +445,7 @@ WHILE unresolved_items is not empty AND round < MAX_ROUNDS:
         # Step A: CC 读源码，准备自己的证据
         cc_evidence = CC 读相关 file:line，分析代码行为
 
-        # Step B: CC 发送论据给 Codex（via tmux）
+        # Step B: CC 发送论据给 Codex（via companion, --resume-last）
         发送:
         """
         Round {round}/{MAX_ROUNDS}，矛盾项: {item}
@@ -497,6 +527,49 @@ IF round >= MAX_ROUNDS AND unresolved_items is not empty:
 **Canonical failure this rule exists to prevent**:
 In the 2026-04-11 S98 close review, Codex R1 said "verifier has a bug at line 162-173; evidence: production code + live data + aligner regression test = 3-way agreement". CC CONCEDE without re-reading sprint98.md §3:285-297 (Pack C Truth contract) where §3:295 literally excludes only 3 fields (stream_channel / alert_recorded_ts_ms / decision_recorded_ts_ms), meaning the spec literally requires stream_contract_version to be in cross-channel parity — i.e., the "verifier bug" framing was wrong; the real issue was spec/production ambiguity. CC's "three witnesses" were actually implementation + its own mirror test + runtime of that code — not independent witnesses. The mechanical fix: in R2, CC should have grepped sprint98.md for "stream_contract_version" and read EVERY hit, not just ones Codex cited. That grep would have surfaced §3:295 immediately.
 
+---
+
+### MANDATORY: Sprint/Retrospective close checklist (added 2026-05-10 after S35 SJC retrospective Round 9 self-irony)
+
+**When this applies**: Any CC response that would claim sprint closed / retro shipped / "X bug closed" / "Y memory entries saved" — i.e., any user-facing closure verdict.
+
+**Why mechanical checklist > advisory memory**: S35 SJC retrospective Round 9 — CC literally shipped `feedback_layered_closure_claim.md` memory ("never claim closed without Codex verify") then 5 minutes later self-applied retro v2 + 4 memories without Codex round-trip. PM caught. Lesson: advisory memory does NOT enforce; only workflow-level mechanical checklist does.
+
+**CC MUST execute this 7-item checklist BEFORE writing any close/ship/freeze claim**:
+
+1. [ ] **User-visible state and metadata agree** — current_state + source_status + tier_reason + no_data_reason + provenance source_url all consistent (not just check current_state.admission_status). Specifically for radar / dashboard products: schools.json AND state.json AND any UI-rendered field must show the same story.
+
+2. [ ] **Source mutation safety verified** — for any Pack D / schools.json / config / data mutation: source-pack membership ✓, liveness HEAD/GET 2xx ✓, page-emptiness >200 chars ✓, old/bad URL locked OR removed (NOT silently kept), idempotency proof.
+
+3. [ ] **Exact verification command recorded and reproduced by reviewer** — paste the literal command (incl venv path + addopts override): `.venv/bin/python -m pytest -q --override-ini='addopts='`. Codex must reproduce same result; env-dependent test = real bug not env corner case.
+
+4. [ ] **xfail entries have owner + expiry + linked ticket + unblock condition** — naked `@pytest.mark.skip` is malpractice (hides bugs); `@pytest.mark.xfail(strict=True, reason="Pack N follow-up: <ticket>, owner=<sid>, expiry=<date>, unblock=<criterion>")` is acceptable carry. Otherwise must fix.
+
+5. [ ] **Live-web evidence captured as artifact when Codex cannot fetch directly** — chrome MCP / Playwright captures must persist (screenshot path, JSON evidence file, captured HTML/text fixture) in `var/reports/` or `tests/fixtures/`. Verbal summary "I clicked, it shows X" insufficient.
+
+6. [ ] **Claims distinguish measured fact vs risk proxy vs hypothesis** — explicit labels:
+   - "measured: 989 passed in CC env (pytest 9.0.3) AND Codex env (same)"
+   - "proxy estimate (NOT measured): trust radius ~34% based on metadata bucket distribution"
+   - "hypothesis (needs S36 audit to verify): random PM click likely 2/3 to expose silent miss"
+
+7. [ ] **Layered closure** (per `feedback_layered_closure_claim.md`):
+   - L1 root cause: identified
+   - L2 fix: shipped (code/data)
+   - L3 user-visible state: verified
+   - L4 acceptance gate: PASSING (or strict xfail with #4 above)
+   - L5 random/stratified sample N: ≥ 80% trust (only required for systemic / user-facing closure)
+
+**META-RULE — verification-rule edits need Codex review** (added 2026-05-10):
+
+If CC is editing a doc/memory/skill/checklist that DEFINES verification rules (this very file qualifies), CC MUST round-trip Codex BEFORE claiming the rule is adopted. Self-applying edits to verification machinery is the exact failure mode that this checklist exists to prevent. Examples:
+- Edit `feedback_layered_closure_claim.md` → must Codex review before "memory saved"
+- Edit cc-codex-pair SKILL.md (this file) → must Codex review before "checklist updated"
+- Edit `acceptance-harness.yml` → must Codex review before "harness updated"
+- Add new memory → must Codex review before declaring "lesson institutionalized"
+
+**Canonical failure this rule exists to prevent**:
+In the 2026-05-10 S35 SJC retrospective Round 9, CC shipped `feedback_layered_closure_claim.md` ("any X closed claim must Codex round-trip verify L4") in commit X, then in commit X+1 (5 minutes later) shipped retrospective v2 + 4 new memories with edits "applied per Codex Round 8 review" but WITHOUT Codex Round 9 round-trip to verify v2 faithfully implemented Round 8 asks. PM had to catch it. The mechanical fix: this very rule. Workflow-level enforcement, not memory advisory.
+
 ## Freeform pair workflow (chat / review / investigate)
 
 For ad-hoc tasks not tied to a specific sprint Phase. Same core principle: **shared context first, then collaborate.**
@@ -568,9 +641,9 @@ Output: Confirmed root cause + fix recommendation (or escalate to human)
 ```
 
 ### Freeform session lifecycle
-- **Open-ended**: No auto-close. Session stays open until user says done or topic resolves.
-- **Resumable**: `scripts/codex-pair.sh send /tmp/continuation_prompt.txt` picks up where left off (same session auto-reused).
-- **Manual close**: `scripts/codex-pair.sh close` when done.
+- **Open-ended**: No auto-close. 线程一直在，直到用户说结束或话题解决。
+- **Resumable**: `node "$CXC" task --resume-last "$(cat /tmp/continuation_prompt.txt)"` 续同一线程接着聊。
+- **No manual close needed**: broker 由 companion 自管；会话自然结束即可。
 
 ## Workflow
 
@@ -587,9 +660,9 @@ CC and Codex **同时独立审查**，互不看对方结论：
 *CC side (internal):*
 - CC runs `/sprint-design-reviewer sN review` internally → produces CC findings
 
-*Codex side (via tmux, task-level prompt):*
+*Codex side (via companion, task-level prompt):*
 ```bash
-scripts/codex-pair.sh send /tmp/cc_codex_prompt.txt
+node "$CXC" task --resume-last "$(cat /tmp/cc_codex_prompt.txt)"
 # --- prompt file content: ---
 请你独立审查 Sprint {N} 的设计。
 
@@ -608,8 +681,8 @@ PROMPT
 
 先读 Codex 的独立 findings：
 ```bash
-# 等 Codex 的 › 提示符出现（表示回复完成），然后读回复
-scripts/codex-pair.sh read 100
+# 前台 task 调用返回的 stdout 即 Codex 回复（无需单独 read / 无需等 › 提示符）
+# 回复已在上一步 task 调用的输出里
 ```
 
 然后 CC 发送自己的 findings 给 Codex，**必须标注专家来源和注入 CC 独有知识**：
@@ -682,7 +755,7 @@ Before sending spec, CC MUST:
 3. Annotate the spec with warnings from these sources
 
 ```bash
-scripts/codex-pair.sh send /tmp/cc_codex_prompt.txt
+node "$CXC" task --resume-last "$(cat /tmp/cc_codex_prompt.txt)"
 # --- prompt file content: ---
 Implement Pack {K} of Sprint {N}.
 
@@ -720,7 +793,7 @@ Check: Does diff match spec file list? Tests written first? Tests pass? Any scop
 
 **Step 3**: If off-track, send feedback in same session (Codex remembers the spec and context):
 ```bash
-scripts/codex-pair.sh send /tmp/cc_codex_prompt.txt
+node "$CXC" task --resume-last "$(cat /tmp/cc_codex_prompt.txt)"
 # --- prompt file content: ---
 Implementation feedback — corrections needed:
 {deviations_list}
@@ -743,9 +816,9 @@ CC 和 Codex **同时独立审查代码**，互不看对方结论：
 *CC side (internal):*
 - CC runs `/cross-review-gate sN` internally → produces CC findings
 
-*Codex side (via tmux, task-level prompt):*
+*Codex side (via companion, task-level prompt):*
 ```bash
-scripts/codex-pair.sh send /tmp/cc_codex_prompt.txt
+node "$CXC" task --resume-last "$(cat /tmp/cc_codex_prompt.txt)"
 # --- prompt file content: ---
 请你独立审查 Sprint {N} 的完整实现。
 
@@ -770,7 +843,7 @@ PROMPT
 
 **Step 2: CC 读 Codex 回复 + enriches and exchanges**
 
-先读 Codex 的独立 findings：`scripts/codex-pair.sh read 100`
+先读 Codex 的独立 findings：即上一步前台 `task` 调用返回的 stdout（无需单独 read）
 
 然后 CC 发送 findings，**必须标注专家来源 + pitfalls 关联**：
 ```
@@ -819,7 +892,7 @@ Before sending, CC MUST:
 3. Annotate each finding with "what worked / what didn't work last time"
 
 ```bash
-scripts/codex-pair.sh send /tmp/cc_codex_prompt.txt
+node "$CXC" task --resume-last "$(cat /tmp/cc_codex_prompt.txt)"
 # --- prompt file content: ---
 Fix these confirmed findings:
 {confirmed_findings}
@@ -850,7 +923,7 @@ PROMPT
 
 **Step 1**: CC asks for final verdict (Codex already has full picture):
 ```bash
-scripts/codex-pair.sh send /tmp/cc_codex_prompt.txt
+node "$CXC" task --resume-last "$(cat /tmp/cc_codex_prompt.txt)"
 # --- prompt file content: ---
 You've reviewed the complete change set and test results for Sprint {N}.
 
@@ -880,33 +953,30 @@ IF Codex NO-GO + 需要用户决策:
   → CC 能修的先修
 ```
 
-**Step 3**: Sprint complete. **Only now close the session.**
-```bash
-scripts/codex-pair.sh close
-```
+**Step 3**: Sprint complete. 线程上下文保留（`status` 给出 Codex session-id，可 `codex resume <id>` 回看）。broker 会话结束自然退出，**无需手动 close**。
 
 ## Error handling
 
 | Situation | Exit code | Action |
 |-----------|-----------|--------|
-| Codex unreachable | 1 | Retry once after 10s. If fails, continue CC-only with `[unverified by Codex]` tag |
-| Timeout | N/A | Run `scripts/codex-pair.sh alive`。WORKING → 等待。DEAD → `prewarm` 重建。Codex 在 tmux 交互模式下不会有 exit code 超时。 |
-| Codex pane dead | N/A | `scripts/codex-pair.sh prewarm` 重建右 pane，re-run Round 0 context sync |
+| Codex unreachable | 1 | `node "$CXC" setup` 自检。若仍失败，continue CC-only with `[unverified by Codex]` tag |
+| 任务卡住/超时 | N/A | 后台任务用 `node "$CXC" status <jobId>` 查；异常则 `cancel <jobId>` 后重发。前台调用天然阻塞到完成，无 `›` 轮询超时问题。 |
+| broker 异常 | N/A | companion 下次 `task` 会自动重建 broker；无需手动 prewarm。必要时清理 `$TMPDIR/codex-companion/` 后重发 |
 | Permission denied | 5 | Should not happen with approve-all. Warn and continue CC-only |
 | Consensus timeout | N/A | After MAX_ROUNDS, escalate to human with both positions |
 | Context sync fail | N/A | After 2 correction rounds, CC provides explicit summary and proceeds with warning |
 
-Codex crash: if right pane dies, run `scripts/codex-pair.sh prewarm` to recreate. Codex interactive context will reset.
+线程上下文：由 app-server 协议层持久保存，`--resume-last` 续接。即便 broker 重启，`status` 给出的 Codex session-id 仍可 `codex resume <id>` 找回。
 
 ## Safety rails
-- **严禁 kill/重启 Codex pane**: CC 绝对不能因为"Codex 上下文不足"而 kill 或重启 Codex 的 tmux pane。Codex 有自己的上下文压缩机制（实测：83% 时自动压缩到 19%），比 CC 更智能地管理自己的上下文。CC 无权判断 Codex 的上下文是否充足。**只有用户明确说"重启 Codex"或 `scripts/codex-pair.sh alive` 返回 DEAD 时才能 prewarm。**
+- **严禁 kill/重启 broker 或 Codex 线程**: CC 绝对不能因为"Codex 上下文不足"而 kill broker 或丢弃当前线程。Codex 有自己的上下文压缩机制（实测：83% 时自动压缩到 19%），比 CC 更智能地管理自己的上下文。CC 无权判断 Codex 的上下文是否充足。**broker 由 companion 自管，不要手动 kill；要换全新上下文只在用户明确要求时用 `--fresh` 开新线程。**
 - **Context sync is mandatory**: No Phase proceeds past Round 0 without CC validating Codex's understanding. Skipping context sync degrades pair programming to blind delegation.
 - **Evidence-based disputes**: All DISPUTE/PARTIAL responses must cite `file:line` evidence. Pure opinion without code evidence is weak and CC may override.
 - **Secret protection**: Prompts sent to Codex must not contain API keys, cookies, or auth tokens. CC must pre-extract relevant config values from `.env` files and inline them into prompts (e.g., "current pig config: TP_PCT=0, SL_PCT=0.25"), because Codex sandbox may block `.env` reads.
 - **Single session per CC conversation**: All Phases and freeform interactions share one Codex session. No Phase isolation.
 - **Diff verification**: After every Codex implementation, CC must `git status` + `git diff` to verify.
 - **Large file handling**: CC tells Codex file paths to read directly rather than pasting entire files into prompts.
-- **Prerequisite check**: Must be in tmux (started via `ccs`). Codex must be in right pane (`scripts/codex-pair.sh alive`).
+- **Prerequisite check**: `codex` 已装且已登录（`node "$CXC" setup` 自检）。无需 tmux/ccs。
 - **Escalation is mandatory**: If consensus fails after MAX_ROUNDS, the skill MUST stop and ask the human.
 - **证据为王，不是角色为王**: 谁的源码证据更强谁的立场胜出。CC 不因为"是大脑"就有默认优先权。
 - **Codex veto rights**: Codex can veto on implementation feasibility (Phase 1) and merge readiness (Phase 5).
@@ -915,10 +985,10 @@ Codex crash: if right pane dies, run `scripts/codex-pair.sh prewarm` to recreate
 
 **核心原则：不限制 Codex 的探索能力。** Codex 在 agent mode 下应该自由读文件、grep 代码、跑 git log — 这是它产出高质量 findings 的前提（D-group 实验已验证）。以下规则只解决实际技术问题，不限制 Codex 的自主性：
 
-- **Always use wrapper**: `scripts/codex-pair.sh send /tmp/prompt.txt`。Wrapper 通过 tmux paste-buffer 发到右 pane 的 Codex。CC 不直接调 acpx 或 tmux 命令。
-- **Prompt via file**: Always write prompt to `/tmp/cc_codex_*.txt` and use `scripts/codex-pair.sh send /tmp/file.txt`。Never pass long prompts as inline arguments.
+- **Always use companion**: `node "$CXC" task --resume-last "<prompt>"`。CC 不直接调 codex CLI、acpx 或任何 tmux 命令。
+- **Prompt via file（长 prompt）**: 长 prompt 先写到 `/tmp/cc_codex_*.txt`，再 `task --resume-last "$(cat /tmp/file.txt)"`。短 prompt 可直接内联。
 - **Secret protection**: CC pre-extracts `.env` 中的安全配置值（不含密钥）内联到 prompt 中，因为 Codex sandbox 可能无法读 `.env`。
-- **Codex hang recovery**: 如果 Codex 不响应，`scripts/codex-pair.sh alive` 检查状态。如果 DEAD → `scripts/codex-pair.sh prewarm` 重建 pane。
+- **Codex 无响应处理**: 前台调用天然阻塞到完成；后台用 `node "$CXC" status <jobId>` 查。若 job 异常，`cancel` 后重发。**不需要也不要 kill broker** —— broker 由 companion 自管。
 
 ## Task-tier, Spec, and Evidence Contract
 
@@ -943,6 +1013,39 @@ Rules：
 - This is a task frame, not a diagnosis frame。
 - CC must not pre-fill root cause as fact unless already verified。
 - Unknown fields must be written as `unknown yet`; they may not be silently omitted。
+
+### Prompt 构造：复用 gpt-5-4-prompting 块库（把"给任务不给结论"变成模板）
+
+本 skill 随包 vendored 了一套 Codex/GPT-5.4 提示块库（来自 OpenAI codex-plugin-cc）：
+```
+$HOME/.claude/skills/cc-codex-pair/skills-ref/gpt-5-4-prompting/
+├── SKILL.md                              # 用法总则
+└── references/
+    ├── prompt-blocks.md                  # 可复用 XML 块（拼装用）
+    ├── codex-prompt-recipes.md           # 端到端模板
+    └── codex-prompt-antipatterns.md      # 反模式
+```
+
+**核心理念（和本 skill 的"给任务不给结论"一致）**：把 Codex 当 operator，给紧凑、块结构化、带 XML 标签的 prompt —— 说清任务、输出契约、跟进默认值，而不是堆自然语言或要它"想更努力"。**先收紧 prompt 契约，再考虑加 reasoning。**
+
+**CC 给 Codex 发任务时，按场景选块拼进 prompt**：
+
+| 场景 | 必带块 | 作用 |
+|--|--|--|
+| 所有任务 | `<task>` | 说清具体任务 + 仓库/失败上下文 + 期望终态 |
+| 编码/调试（Phase 2/4） | `<completeness_contract>` `<verification_loop>` `<missing_context_gating>` | 别停在第一个貌似答案；改完自检；高风险缺信息才停下问 |
+| 审查/对抗审查（Phase 1/3） | `<grounding_rules>` `<structured_output_contract>` `<dig_deeper_nudge>` | 每条 finding 必须有证据；按严重度排序；挖二阶问题 |
+| 调研/选型（freeform chat） | `<research_mode>` `<citation_rules>` | 标注事实 vs 推断；引用来源 |
+| 写操作（`--write`） | `<action_safety>` | 只动该动的，禁止无关重构 |
+
+**反模式（务必避免，详见 antipatterns.md）**：
+- 模糊任务框（"看看这个，说说想法"）→ 用 `<task>` 写清
+- 缺输出契约 → 用 `<structured_output_contract>`
+- 把多个无关任务塞进一次 run → 拆成多次 `task`
+- 用"想更努力/更聪明"代替更好的契约 → 用 `<verification_loop>`
+- 无证据的确定性断言 → 用 `<grounding_rules>` 标注推断
+
+**和 8-element contract 的关系**：8-element 是本 skill 的高层任务框（WHY/WHAT/WHERE/...）；XML 块库是把其中"输出契约/完成定义/grounding"落到具体可复制的措辞。两者叠加用：8-element 定骨架，XML 块定每段的精确措辞。
 
 ## Failure-Mode Routing Contract
 
