@@ -9,6 +9,7 @@ REWORK
 > 日期：2026-09-21。
 > **r1 增补（同日）**：申请方（老猫 / Jimmy）追问「repo 是否够拟合」「是否像 TV 公开趋势公式」，并给出 `licett/laomao data/fetch-20260507/laomao-posts.jsonl` 的补充统计与 TradingView 候选先验。已并入 §0A（三条明文裁决）、§5.3（H0-TV）、§6.8（TV 复现验收）、§8、§9。**裁决维持 REWORK**；补充证据全部与 PREVIEW 复算一致，且进一步否定「Parallel Channel」先验。
 > **r2 增补（同日）**：Jimmy 提供 OpenClaw 版老猫的通道来源链（`laomao/backtest.py` oracle 优先 + `indicators/trend_channel.py` S39 假设引擎 `ema_percent_envelope`：mid = EMA34，rails = mid×(1±0.018958)，`formula_status="hypothesis"`，S40/S41 fail-closed），要求碰撞后给出**更好且有依据**的版本。已并入 §0B（A 对照表 / B 分层真源裁决 / C 推荐架构与硬验收 / D 文首裁决）、§3.1 与 §7.2 字段、§6.9 硬验收、§8、§9。**文首裁决维持 REWORK**：分层真源作为架构**采纳（设计层 PASS）**，但填补模型在过 §6 之前仍是 `hypothesis`，票面交付物（可替代 proxy 的通道）尚未成立。S39 在 409 日真值上的碰撞结果：轨位 RMSE 0.46–0.55%、**宽度残差 0.79%**（H1 0.12%），中轨对、宽度模型错（§0B.1）。
+> **r3 增补（同日，thread_ref=投资早会-2026-09-21-laomao-truth-channel-fit）**：老猫提出 L0 oracle / L1 fit（路径 A 分段平行）/ L2 hypothesis 三层与实现前对照实验设计，请裁四问。并入 §0C：**采纳两层不采纳三层**——L0 采纳（词表统一到 §0B.4）；L1「分段平行拟合重建无播报日」**不作为源、不进 brief、不进 shadow**，只以 H0 报表存在（留出重建 RMSE 0.47%，比朴素线性插值 0.16% 还差 3 倍，比 H1 0.12% 差 4 倍）；L2 采纳但去掉「间隙 ≤N 日」限制并套 `formula_status` 四级梯子。k **允许且必须**网格搜索，**禁止**以 0.018958 为先验（半年 k* 1.59–2.11，常数结构自证不稳）。hypothesis 禁 brief / 禁 `system_signal` 为**硬约束**且加严。对照实验设计采纳，补 (d) H1 族为必测项。文首不变。
 
 ---
 
@@ -25,6 +26,7 @@ REWORK
 | brief 换行 | **本票不授权** | 换行条件、字段、模板见 §7；须另开 IMPL-GATE r3 |
 | 追问三裁（r1） | 见 **§0A** | A 抽取立、A 拟合不立；「分段斜率 + 可变轨距」为直线类模型的**下限**而非目标；TV Parallel Channel **不作** replica 验收对照，改为 H0-TV 机械化零模型 + H1 的 TV 复现验收 |
 | 分层真源（r2，OpenClaw 碰撞） | 见 **§0B** | **采纳并加严**：oracle 当值 = 真值标签、物理隔离、不可拟合掉；无当值日只允许**单一全局生成公式**填补；`formula_status` 四级梯子（hypothesis → replica_shadow → replica → author_confirmed），hypothesis 不进 JSON / history / brief；S39 EMA% 包络作候选 H6 已测：中轨对、宽度错，被 H1 全面压制 |
+| 老猫 L0/L1/L2 四问（r3） | 见 **§0C** | L0 采纳；**L1 不采纳为源**（只是 H0 报表）；L2 采纳、去间隙限制、套梯子。k 必须网格搜索、禁绑 0.018958。hypothesis 禁 brief / 禁 `system_signal` = 硬约束。L1 重建**不进 brief 不进 shadow**。对照实验采纳，加 (d) H1 必测 |
 
 置信度：总判 REWORK 0.92；直线模型被证伪 0.95；H1 为正确模型族 0.80（参数 / 对齐 / 交易所待定，见 §2.4 与 §9）；抽取半部 PASS 0.90（预览 28 条抽检，全量抽检在 §6.1）。
 
@@ -188,6 +190,74 @@ OpenClaw 版（Jimmy 转述）：(1) **oracle 优先**——原文当天明确�
 ### 0B.5 D · 文首裁决
 
 维持 **REWORK**。理由：B/C 是架构层裁决（设计 PASS，进入 §7 契约），但票面问题是「能否重建可替代 proxy 的真值通道」——分层真源把 409 日历史标好了，前向仍全靠 `formula_status=hypothesis` 的模型；在它过 §6.3 / 6.5 / 6.8 / 6.9 之前，交付物不成立。文首行不因本增补改变。
+
+---
+
+## 0C. r3 增补：老猫 L0/L1/L2 分层与对照实验设计——四问明文裁决
+
+老猫提案（thread_ref=投资早会-2026-09-21-laomao-truth-channel-fit）：L0 oracle（explicit / conflict，fail-closed 不平滑）；L1 fit = 路径 A 分段平行 / 可变轨距拟合，`status=fitted`，用于重建无播报日「应有轨」并与 L0 交叉验证；L2 hypothesis = 类 S39 包络，仅当 L0 缺失且间隙 ≤N 日，`rail_confidence=low`，默认禁 brief / 禁 `system_signal`，只进 shadow。另附实现前 notebook 对照实验四步与验收硬条建议。
+
+### 0C.1 新增证据（PREVIEW，剔 13752）
+
+| 「重建无播报日」的三种办法 | 留出重建 RMSE | p90 \|e\| | 说明 |
+|---|---|---|---|
+| 朴素线性插值（相邻两帖连线，预测中间日） | 跨 2 日 0.137% / **跨 3 日（= 周末 Sat/Sun）0.159%** / 跨 4 日 0.188% | 0.23 / 0.27 / 0.29% | 无模型、无参数；只能填历史缺日，不能前向 |
+| **路径 A 分段平行拟合**（10 帖共享斜率 OLS，留出段内一点） | **0.470%** | 0.750% | 比朴素插值差 3 倍——平行直线约束把曲线拉直了 |
+| H1 生成模型（EMA(H,33)/EMA(L,33)，Bitstamp，未对齐半根 bar） | **0.120%** | ≈0.20% | 输入是 OHLC；任意长缺口、前向皆可算 |
+
+常数 k 的半年稳定性（k* = 真值宽度 % 中位 / 2）：2023-H1 **1.77**、2023-H2 **1.59**、2024-H1 **2.11**、2024-H2 1.93、2025-H1 1.90 → 极差 0.52 个百分点（±14%）。OpenClaw 的 0.018958 ≈ 全期中位 1.896，是各半年的平均，对任一半年都不对。
+
+### 0C.2 四问裁决
+
+**问 1 · 是否采纳 L0/L1/L2 三层：采纳两层，不采纳三层。**
+
+| 层 | 裁决 | 依据与改动 |
+|---|---|---|
+| L0 oracle | **采纳**（= §0B.3 B1/B2/B7） | 词表统一到 §0B.4：`rail_source=oracle`、`rail_confidence=explicit\|conflict`、**`formula_status=null`**（oracle 没有公式，不得写 `explicit`）；`high/low` 这类序数置信度**不采用**——它把「谁说的」压成「多可信」，丢信息。conflict fail-closed 不平滑：采纳 |
+| L1 fit（路径 A 分段平行） | **不采纳为源**；`rail_source` 枚举里**没有** L1 | §0C.1：它是三种重建里最差的（0.47%），连朴素插值都不如；且它不能前向（段末不知向哪延）。「与 L0 交叉验证」这个需求由 §6.3 的生成模型留出（两年拟合、一年验证）完成，不需要直线。L1 只以 **H0 报表**存在（§5.2 必跑必报），产物是误差表，不是轨位；`status=fitted` 不存在 |
+| L2 hypothesis | **采纳为「模型层」**，两处改动 | (i) **去掉「间隙 ≤N 日」条件**：生成模型的输入是交易所 OHLC，148 日缺口与 2025-06-24 之后的无穷缺口对它没有区别；间隙限制只对插值有意义，而插值已不采纳。真正的限制是数据质量（`bars_missing` → null / fail）与 `formula_status` 阶段。(ii) 单级 `hypothesis` → §0B.3 B4 四级梯子；「只进 shadow 文件」映射为：`hypothesis` 只进 `research/`，`replica_shadow` 才进 history |
+
+词表映射（提案 → 本文）：`L0 formula_status=explicit, rail_confidence=high` → `rail_source=oracle, rail_confidence=explicit, formula_status=null`；`conflict` → `rail_confidence=conflict`；`L1 status=fitted` → 无（H0 报表）；`L2 status=hypothesis, rail_confidence=low` → `rail_source=model, rail_confidence=derived, formula_status=hypothesis`；「shadow 文件」→ `research/`（hypothesis）/ `history`（replica_shadow）。
+
+**问 2 · k 是否允许网格搜索，还是禁止绑定 0.018958：允许且必须搜索；禁止绑定。**
+
+- 0.018958 是对同一语料宽度中位的一半，**不是先验知识**；把它写进代码 = 把一次拟合结果伪装成常数。任何进入代码的常数（k、N=34、N=30 皆同）只能来自过闸的 fit report，带 `params_version`（§4.3）。
+- 网格：k ∈ [0.010, 0.030] 步 0.0005，N ∈ [20, 45] 步 1，两种对齐，≥4 交易所；报全局 k* 及**按半年的 k***。
+- 但要说清：搜 k 救不了常数宽度这个结构——族内最优 0.47%（§0B.1），半年 k* 极差 0.52 pt（§0C.1）。因此附加判据：**若按半年拟合的 k* 极差 > 0.2 个百分点，常数 k 结构判 fail**，无论全局 RMSE 多少。H6 保留在候选表只为对照，不为放行。
+
+**问 3 · hypothesis 默认禁进 brief / 禁推 system_signal 是否为硬约束：是，且比提案更严。**
+
+| 级 | JSON | history | brief | `system_signal` |
+|---|---|---|---|---|
+| `hypothesis` | **否** | **否** | 否 | 否 |
+| `replica_shadow` | 是（块） | 是 | 否 | 否 |
+| `replica`（IMPL-GATE r3 后） | 是 | 是 | 是（§7.3 模板） | **否** |
+| `author_confirmed` | 是；可填 `trend_channel` 槽 | 是 | 是 | 仍否，直到另有 `signal_gate_ref` 指向已 PASS 的信号闸 |
+
+「禁推 system_signal」不是 hypothesis 一级的默认值，是**全部模型级别的常量**：`system_signal_eligible=false`，写入其他值进程非 0 退出（§0B.4 注入 iii）。提案第 4 条「L2 不得单独触发满仓 / 清仓表述」扩展为：**任何模型级别、任何组合**均不得产出满仓 / 清仓 / 减仓表述；允许的措辞上限是 r2 R3「若按 X 通道，价格位于 Y」。
+
+**问 4 · L1「无播报日重建」是否允许进 brief，或仅 shadow + 交叉验证：两者都不允许。**
+
+- 不进 brief：它不能前向，brief 面对的每一天都是它的「段末之外」。
+- 不进 shadow：shadow 比的是 model vs proxy vs oracle（§6.6），L1 在里面没有角色；把 0.47% 误差的重建值放进 shadow 只会污染对照。
+- 不作交叉验证标签：验证一个 0.12% 残差的模型，不能用 0.16%（插值）或 0.47%（平行拟合）的伪标签；标签必须是 L0 本身，验证方式是 §6.3 留出。
+- 唯一去向：§5.2 H0 报表（段数、段长、RMSE、曲率、位置一致率），作为「直线类模型为何不行」的可复现证据。
+
+### 0C.3 对照实验设计：采纳，六处修订
+
+| 提案步骤 | 裁决 | 修订 |
+|---|---|---|
+| 1) 抽 409 日 L0 表（date, upper, lower, width, width_pct, source_msg_id） | 采纳为**最小视图** | 可验收的产物是 §3.1 全字段（`message_id` / `sent_at_utc` / `anomaly_flags` / `stated_*` / `source_text_sha256` / `rail_confidence`）；`width_pct` 分母定义为 `(U+L)/2`；13752 一类行照 §3.3 打标不剔除，评分时排除 |
+| 2) 候选 (a) 分段平行 (b) TV 枢轴版 (c) EMA34±k 扫 k | 采纳，**补 (d)** | (a) = H0，(b) = H0-TV（锚点规则事先钉死，§0A.2），(c) = H6（k、N 同扫，报半年 k*）；**(d) H1 `EMA(High,N)/EMA(Low,N)` 为必测项**，N 20–45、两种对齐、≥4 交易所——提案漏了目前唯一达标的族。生成模型 (c)(d) 在**全部 409 日**评分，不限「连续段」；「连续段」只约束 (a)(b) |
+| 2) 指标：MAE / MAPE、轨距误差、\|Δu−Δl\| 平行残差、操作日一致性 | 采纳为补充指标 | 主指标统一为 §6.3 / §6.5 / §6.9：pooled RMSE%、各轨 bias、宽度残差 RMSE、近轨日一致（<1% / <0.5%）、翻转日召回 / 精度、操作日一致性**以作者自述标签为准**、>7d 缺口两端边界跳变、按年留出。\|Δu−Δl\| 分布**只报告不计分**（§5.1：平行不是约束）。MAE / MAPE 可并列报 |
+| 3) 断档日禁用 L2 填主轨；只报「若启用 hypothesis 的误差上界」 | 采纳 | 主轨文件 = `rails.jsonl` 只容 oracle（§6.9 源隔离）。「误差上界」在断档日不可测，定义为该模型在 L0 日按半年分组的 \|resid\| p90 与 max（§0B.1 表格式）；**禁止**用插值伪标签当上界 |
+| 4) 验收硬条：L0 覆盖日 brief 只用 explicit | 修订 | 前向 brief 面对的日期没有 L0，此条空转；改为：任何**历史回放 / 回测报告**在 L0 日只显示 oracle 值并标 `rail_source=oracle`，与模型值并列时不得混算（§0B.3 B6） |
+| 4) L2 不得单独触发满仓 / 清仓；与 Donchian shadow ≥14d 再谈替换 | 采纳并加严 | 见问 3；shadow = §6.6 Layer 1（历史回测，现在就跑）+ Layer 2（盒上 ≥14 UTC 日），缺一不可 |
+| notebook 实现前跑、PASS 后工程化 | 采纳 | notebook 只读 uploads / OHLC，输出到 `research/`（含 sha256），**不得写任何生产路径**；工程化的入场条件 = §6 全表 + IMPL-GATE r3 |
+
+### 0C.4 文首
+
+维持 **REWORK**（同 §0B.5）。
 
 ---
 
@@ -619,6 +689,12 @@ replica 固定行模板（预定，r3 可改字不可改槽）：
 | （r2）`formula_status="hypothesis"` 明确非终版 | 方向对 | **采纳并加严为四级梯子**；hypothesis 不触达读者（B4） |
 | （r2）S40/S41 置信不足 fail-closed | 方向对；转述未给判据 | **采纳并写死三处**（数据 / 状态 / 信号层，B5）+ 三项注入测试（§6.9） |
 | （r2）填补模型可含分段平行通道 | 只能以 H0-TV 机械化形式参赛 | 人工锚点版**不可 fail-closed**，不准入（B3） |
+| （r3）L0 / L1 / L2 三层 | L1 留出重建 0.47%，朴素插值 0.16%，H1 0.12% | **两层不三层**：L0 采纳、L1 只是 H0 报表、L2 采纳去间隙限制 |
+| （r3）L1 重建无播报日「应有轨」并与 L0 交叉验证 | 不能前向；伪标签精度低于被验模型 | 不进 brief、不进 shadow、不作标签；交叉验证 = §6.3 留出 |
+| （r3）L2 仅当间隙 ≤N 日 | 生成模型输入是 OHLC，与缺口长度无关 | 去掉此条件；限制改为数据质量 + `formula_status` |
+| （r3）k 扫描含 1.8958% | 半年 k* 1.59–2.11 | 允许且必须扫；禁绑常数；半年 k* 极差 >0.2 pt → 常数 k 结构 fail |
+| （r3）hypothesis 默认禁 brief / 禁 system_signal | — | **硬约束**；hypothesis 连 JSON / history 都不进；`system_signal` 对全部模型级别恒禁 |
+| （r3）候选 (a)(b)(c) | 漏了 H1 | 补 (d) H1 为必测项 |
 
 ---
 
@@ -642,6 +718,9 @@ replica 固定行模板（预定，r3 可改字不可改槽）：
 | （r2）S39 宽度模型错、H1 压制 S39 | 0.90 | 用全语料 + 老猫所用交易所 + 半根 bar 对齐后，S39 族（N、k 放开）pooled RMSE ≤ H1 的 1.1 倍 **且** 宽度残差 ≤0.30% → 两族并列，§5.3 重排 |
 | （r2）hypothesis 不得触达读者 | 0.85 | 原则方裁定 brief 可写带 `hypothesis` 标签的通道行 → §0B.3 B4 降为「可写、必标、仍禁 system_signal」，其余不变 |
 | （r2）文首维持 REWORK | 0.90 | 原则方裁定「分层真源架构落地」即票面交付 → 文首改 PASS，但 §6 全部门槛转为 IMPL-GATE r3 的入场条件，一条不减 |
+| （r3）L1 不作为源 | 0.92 | 全语料上某种分段直线族的留出重建 RMSE ≤ 生成模型最优值的 1.2 倍 **且** 能给出前向延伸规则 → L1 升为候选族进 §5.3 |
+| （r3）L2 去掉间隙限制 | 0.95 | 发现生成模型残差随「距最近 oracle 日的天数」单调增长（斜率显著）→ 说明模型漂移，恢复间隙限制并加漂移检测 |
+| （r3）常数 k 半年极差判据 0.2 pt | 0.80 | 用老猫所用交易所 + 半根 bar 对齐后半年 k* 极差 ≤0.2 pt → 判据不触发，H6 按 RMSE 与 H1 同台比 |
 
 ---
 
