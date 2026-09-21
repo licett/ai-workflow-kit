@@ -8,6 +8,7 @@ REWORK
 > 边界：research-only。本文不改 py / README / DESIGN / JSON / history；不产出任何 `system_signal`；拟合结果在过 §6 闸门之前只能进研究表，不得进 brief。
 > 日期：2026-09-21。
 > **r1 增补（同日）**：申请方（老猫 / Jimmy）追问「repo 是否够拟合」「是否像 TV 公开趋势公式」，并给出 `licett/laomao data/fetch-20260507/laomao-posts.jsonl` 的补充统计与 TradingView 候选先验。已并入 §0A（三条明文裁决）、§5.3（H0-TV）、§6.8（TV 复现验收）、§8、§9。**裁决维持 REWORK**；补充证据全部与 PREVIEW 复算一致，且进一步否定「Parallel Channel」先验。
+> **r2 增补（同日）**：Jimmy 提供 OpenClaw 版老猫的通道来源链（`laomao/backtest.py` oracle 优先 + `indicators/trend_channel.py` S39 假设引擎 `ema_percent_envelope`：mid = EMA34，rails = mid×(1±0.018958)，`formula_status="hypothesis"`，S40/S41 fail-closed），要求碰撞后给出**更好且有依据**的版本。已并入 §0B（A 对照表 / B 分层真源裁决 / C 推荐架构与硬验收 / D 文首裁决）、§3.1 与 §7.2 字段、§6.9 硬验收、§8、§9。**文首裁决维持 REWORK**：分层真源作为架构**采纳（设计层 PASS）**，但填补模型在过 §6 之前仍是 `hypothesis`，票面交付物（可替代 proxy 的通道）尚未成立。S39 在 409 日真值上的碰撞结果：轨位 RMSE 0.46–0.55%、**宽度残差 0.79%**（H1 0.12%），中轨对、宽度模型错（§0B.1）。
 
 ---
 
@@ -23,6 +24,7 @@ REWORK
 | proxy 契约 | **不变** | r2 §3 放行文案原样；新增发现记录：Donchian-close N=20 与真值位置一致率 43.8%，宽度中位 12.24% vs 3.64%（§6.6）；不影响 PASS，影响 shadow 的观测靶 |
 | brief 换行 | **本票不授权** | 换行条件、字段、模板见 §7；须另开 IMPL-GATE r3 |
 | 追问三裁（r1） | 见 **§0A** | A 抽取立、A 拟合不立；「分段斜率 + 可变轨距」为直线类模型的**下限**而非目标；TV Parallel Channel **不作** replica 验收对照，改为 H0-TV 机械化零模型 + H1 的 TV 复现验收 |
+| 分层真源（r2，OpenClaw 碰撞） | 见 **§0B** | **采纳并加严**：oracle 当值 = 真值标签、物理隔离、不可拟合掉；无当值日只允许**单一全局生成公式**填补；`formula_status` 四级梯子（hypothesis → replica_shadow → replica → author_confirmed），hypothesis 不进 JSON / history / brief；S39 EMA% 包络作候选 H6 已测：中轨对、宽度错，被 H1 全面压制 |
 
 置信度：总判 REWORK 0.92；直线模型被证伪 0.95；H1 为正确模型族 0.80（参数 / 对齐 / 交易所待定，见 §2.4 与 §9）；抽取半部 PASS 0.90（预览 28 条抽检，全量抽检在 §6.1）。
 
@@ -86,6 +88,106 @@ REWORK
 | 对 409 日真值 RMSE | — | 不可复现；机械化后见 H0-TV | 未测；不列候选、不列对照 | 0.12–0.30%（单交易所、未对齐半根 bar） |
 
 结论：申请方先验「较像 Parallel Channel、不像 Linear Regression Channel（因为重绘）」**方向反了**——真值恰恰是每根 bar 重算的指标，只是不是回归通道；「徐小明通达信通道是否有 TV 脚本」与裁决无关，数据自己选出了模型族。
+
+---
+
+## 0B. r2 增补：与 OpenClaw 来源链碰撞（A–D）
+
+OpenClaw 版（Jimmy 转述）：(1) **oracle 优先**——原文当天明确播报「上轨当值 / 下轨当值」则直接采信，`rail_confidence="explicit"`，冲突则 `"conflict"`，日报只是搬运老猫自己的数；(2) **S39 假设引擎兜底**——无当值日用 `ema_percent_envelope`：中轨 = 34 周期 EMA，上轨 = 中轨×(1+k)，下轨 = 中轨×(1−k)，k≈0.018958，`formula_status="hypothesis"`，S40/S41 置信不足 fail-closed。以下是碰撞，不是照抄。
+
+### 0B.1 碰撞数据：S39 在 409 日真值上
+
+同 §2.1 设置（Bitstamp 日线、剔 13752、lag=1 只用已收 bar / lag=0 含当日整根 bar）：
+
+| 模型 | 轨位 RMSE | biasU / biasL | 逐年 RMSE | max \|res\| | 位置一致（全部日） | 近轨日一致（收盘距轨 <1% / <0.5%） | **宽度残差 RMSE** | 翻转日召回 / 精度 |
+|---|---|---|---|---|---|---|---|---|
+| **S39** EMA34(close)×(1±0.018958) lag1 | 0.551% | −0.07 / −0.10 | 0.58 / 0.56 / 0.50 | 1.57% | 96.8% | 86.0% / 80.5% | **0.790%** | 0.85 / 0.95 |
+| S39 lag0 | 0.456% | +0.12 / +0.08 | 0.42 / 0.51 / 0.43 | 1.48% | 96.8% | — | 0.789% | — |
+| S39 族最佳（N、k 全放开，lag1） | 0.474%（N=32，k*=0.01918） | — | — | — | 96.1% | — | 0.792% | — |
+| H1 EMA(H,31)/EMA(L,31) lag1 | 0.303% | +0.03 / −0.02 | 0.29 / 0.35 / 0.26 | 1.26% | 97.3% | 88.2% / 73.2% | **0.116%** | 0.93 / 0.85 |
+| H1 EMA(H,33)/EMA(L,33) lag0 | **0.120%** | +0.07 / −0.01 | 0.13 / 0.12 / 0.10 | 0.66% | **99.0%** | **95.7% / 90.2%** | 0.144% | **0.99 / 0.92** |
+
+宽度误差按半年（模型 − 真值，百分点）：
+
+| 半年 | 真值宽度中位 | S39 | H1(31,lag1) |
+|---|---|---|---|
+| 2023-H1 | 3.48% | +0.04 | +0.05 |
+| **2023-H2** | 3.12% | **+0.71**（太宽 → 漏报跌破：近轨日 6 次 below→inside） | −0.02 |
+| **2024-H1** | 4.14% | **−0.46**（太窄 → 假突破） | +0.07 |
+| 2024-H2 | 3.78% | −0.04 | +0.03 |
+| 2025-H1 | 3.73% | +0.03 | +0.08 |
+
+真值宽度 %：均值 3.75、标准差 0.81；与常数 2k=3.79% 相差 >0.5 个百分点的日子占 **58%**，>1 个百分点占 23%。1 个百分点的宽度差 = 每条轨 0.5% 的位置差，正是 §1.4 说的操作日量级。
+
+读法：**S39 把中轨做对了、把宽度做错了。** k=0.018958 ≈ 真值宽度中位 3.79% 的一半——它是对同一语料的拟合值，不是独立证据；S39 族把 N、k 全放开也只能到 0.47%，因为常数百分比宽度在低波动期太宽、高波动期太窄。把 `mid×(1±k)` 换成 `EMA(High,N)` / `EMA(Low,N)`，宽度残差 6.8 倍下降、轨位 RMSE 2–4 倍下降、近轨日一致率从 86% 到 96%。这就是「更好版本」的依据，其余部分 OpenClaw 的方向是对的。
+
+### 0B.2 A · 对照表：路径 A vs OpenClaw vs 本文推荐
+
+| 维度 | 路径 A（当值序列反拟平行通道） | OpenClaw（oracle + S39 EMA% 包络） | 本文推荐（oracle + H1 梯子，§0B.4） |
+|---|---|---|---|
+| 适用日 | 仅有帖日（409），且需切段 | 有帖日走 oracle；无帖日与 2025-06-24 之后走 S39 | 同 OpenClaw 分层；但 oracle 与 model **物理分文件**，一日只用一源 |
+| 前向可算 | 否（锚点无规则，段末不知向哪延） | 是 | 是 |
+| 失败模式 | 段内曲率（75% 窗口）；段长 <15 帖退化；贴轨日误判；无法 fail-closed（人工锚点） | 宽度常数 %：低波动期漏跌破、高波动期假突破（±0.5–0.7 pt）；oracle→model 边界跳变最大 +1.15%（2023-08-22）；oracle 日进评估会自评满分 | 半根 bar 对齐与交易所未定（§2.4）；边界跳变最大 −0.52%（未对齐版）；须 §6.9 硬验收兜住 |
+| 「收盘写死」契合 | 无关（只用轨位序列） | 中轨用 close 可接 A3/A4；确认语义未述 | 直接沿用 A3 / A4 / R5：`close_confirmed` 对象、grace、无重绘 |
+| 「平行推进」契合 | **假设严格平行**——观测 9.6% | 百分比平行：Δu/Δl ≡ (1+k)/(1−k) ≈ 1.039，近似合观测但机制不对 | 内生近平行：\|Δu−Δl\| = α·\|range_t − EMA(range)\| → 预测中位 0.07–0.2%，观测 0.077% / p90 0.23%（§0A.1） |
+| 「可变轨距」契合 | 段内常数 → 否 | 常数 % → **否**（宽度残差 0.79%，58% 日偏 >0.5 pt） | 宽度 = EMA 日振幅 → **是**（残差 0.12%） |
+| 对 409 日真值 RMSE | 0.25%（每 10 帖一段，退化） | 0.46–0.55% | 0.12–0.30% |
+| 状态标签 | 无 | `rail_confidence` + `formula_status="hypothesis"`（单级） | 四级 `formula_status` 梯子 + 门（§0B.4） |
+| 对读者暴露 | — | hypothesis 轨位进日报 | hypothesis **不进** JSON / history / brief |
+
+### 0B.3 B · 是否采纳「分层真源」：采纳，附五条加严
+
+| # | OpenClaw 做法 | 裁决 | 依据 |
+|---|---|---|---|
+| B1 | explicit 当值 = 直接采信 | **采纳**：oracle 行 = 真值标签，`rail_source="oracle"`，`rail_confidence="explicit"`；**任何模型不得改写、不得平滑、不得用于"修正"它**；模型只能被它评分 | §1.5 抽取 28/28 逐字；这就是 §3 的真值序列 |
+| B2 | 冲突 → `"conflict"` | **采纳并加严**：同日多帖数值不一致或同帖前后不一致 → `conflict`，**既不采用也不计分、不取均值**；计数进 §6.1 报告 | 取均值会制造一条谁也没说过的轨 |
+| B3 | 无当值日用模型填补 | **采纳并限定**：填补只允许**单一全局生成公式**（§5.3 候选，含 S39 作 H6、H0/H0-TV 作零模型）；**禁止**逐缺口插值、逐段重拟、人工锚点平行通道（不可 fail-closed，§0A.2 裁决 3）；「分段平行通道」只以 H0-TV 机械化形式参赛 | §0A.2 裁决 1：模型输入是 OHLC，断档不影响递推 |
+| B4 | `formula_status="hypothesis"` 单级 | **加严为四级梯子**：`hypothesis`（未过 §6.3 / 6.5 / 6.8）→ `replica_shadow`（过 Layer 1，进 history 不进 brief）→ `replica`（过 Layer 2 + IMPL-GATE r3，可进 brief）→ `author_confirmed`（作者确认公式，可填 `trend_channel` 槽）。**`hypothesis` 只存在于研究文件**，不写 JSON、不写 history、不进 brief | §0B.1：hypothesis 级模型在近轨日 14% 判错，读者恰在那些日子行动 |
+| B5 | S40/S41 fail-closed | **采纳并写死三处**：数据层（`bars_missing` 非空 → 轨位 null、`status=fail`，沿用 GATE `:187`）；状态层（`formula_status` 低于阶段要求 → 该块不得输出）；信号层（`system_signal_eligible=false` 常量，见 C） | r2 R4「文件缺失 ≠ 平静」 |
+| B6（新增） | — | **一日一源、不混算**：某日分类只能来自 oracle 或 model 之一；oracle↔model 相邻处打 `source_transition=true`；模型评分**只能**用 model 值对 oracle 值，脚本须断言不存在 oracle 对 oracle 的比较 | S39 边界跳变 +1.15% / −0.65%；oracle 日进评估 = 给老猫自己的数打分 |
+| B7（新增） | — | **oracle 层是有限历史**：止于 2025-06-24；前向 brief 里 `rail_source` 恒为 `model`。若老猫复播，新帖走 §3 schema + §6.1 抽检后进 oracle，并触发一次模型重评分（漂移检测），不得静默并入 | 「oracle 优先」是标注策略，不是活数据源 |
+
+### 0B.4 C · 推荐架构与硬验收
+
+**文件与块**
+
+| 层 | 载体 | 内容 | 允许写入者 |
+|---|---|---|---|
+| L0 oracle | `truth_series/rails.jsonl`（§3.1，新增 `rail_source` / `rail_confidence`） | 只有 explicit / conflict 行 | 抽取器 |
+| L0 覆盖 | `truth_series/coverage.jsonl`（§3.2） | 每日历日一行 | 抽取器 |
+| L1 model（研究） | `research/model_fill-<params_version>.jsonl` | 每日历日一行模型值 + `formula_status` + `scored_against_oracle`（oracle 日为 true，仅供评分） | 拟合器 |
+| L1 model（生产） | JSON `trend_channel_replica`（§7.2，新增字段见下） | 仅 `formula_status ≥ replica_shadow` 时可输出 | `btc_multisource.py`（IMPL-GATE r3 后） |
+| proxy | `trend_channel_proxy` | 不变 | 不变 |
+
+**字段（§3.1 与 §7.2 同步）**
+
+| 字段 | 取值 | 规则 |
+|---|---|---|
+| `rail_source` | `oracle \| model \| none` | oracle 只在 L0；生产 JSON 恒 `model`（B7） |
+| `rail_confidence` | `explicit \| conflict \| derived \| none` | oracle → explicit / conflict；model → derived；null 轨位 → none |
+| `formula_status` | `hypothesis \| replica_shadow \| replica \| author_confirmed` | 只对 model；升级只经 §6 + IMPL-GATE，降级随时（§6.7 证伪即回 hypothesis） |
+| `params_version` | string | §4.3；变更 = 新版本，不回写 |
+| `source_transition` | bool | 与前一日历日 `rail_source` 不同则 true（B6） |
+| `system_signal_eligible` | **常量 `false`** | 本票及 r3 均不得改；改动条件：`formula_status=author_confirmed` **且** 另有 `signal_gate_ref` 指向已 PASS 的信号闸 |
+| `signal_gate_ref` | string \| null | 本票恒 null |
+
+**硬验收（新增 §6.9，与 §6.1–6.8 叠加）**
+
+| 项 | 门槛 |
+|---|---|
+| 源隔离 | `rails.jsonl` 内 `rail_source` 全为 oracle；`model_fill` 内全为 model；任一文件出现对方 → fail |
+| 冲突处理 | `conflict` 行不在任何评分样本、不在任何输出；报告冲突数与 message_id |
+| 自评守卫 | 评分脚本断言：目标列来自 L0，预测列来自 L1，且 L1 值由 OHLC 递推生成（非拷贝）；oracle 对 oracle 的比较出现即 fail |
+| 边界跳变 | 每个 >7d 缺口两端 oracle 日，\|model − oracle\| 两轨均 ≤0.30%（预览：S39 +1.15% / +0.79% / −0.65% 三处不达；H1 未对齐版 −0.52% 一处不达 → 对齐是 §2.4 第 1 步的原因） |
+| fail-closed 三注入 | (i) 抽掉窗口内 1 根 bar → 轨位 null、`status=fail`；(ii) 强制 `formula_status=hypothesis` → 块不输出、brief 无通道行或回退 proxy 行；(iii) 任何路径尝试写 `system_signal_eligible=true` → 进程退出非 0 |
+| 一日一源 | history 中不存在同日两源；`source_transition` 日在 brief 只允许写模型行（历史 oracle 不进 brief） |
+| 禁止事项 | **`hypothesis` / `replica_shadow` / `replica` 三级均不得推 `system_signal`**；`missing_inputs` 必含 `"trend_channel (LaoMao 2.0 original)"` 直到 `author_confirmed`；GATE `:293` REFUSE 升级条件扩展到三级中任一级 |
+
+**相对 OpenClaw 的六处改动与依据**：① oracle 层加 provenance 哈希、异常打标、作者位置标签（§3.1；OpenClaw 转述未见）；② 宽度模型 `mid×(1±k)` → `EMA(H)/EMA(L)`（§0B.1，6.8× 宽度残差）；③ 单级 hypothesis → 四级梯子 + 门（B4）；④ 一日一源 + 边界跳变 + 自评守卫（B6）；⑤ hypothesis 不触达读者（B4）；⑥ TV 两行复现作为放行必要条件（§6.8）。S39 作为 H6 保留在候选表，供 REWORK 用全语料 + 正确交易所复测——若它在那套数据上反超 H1，§5.3 排序改，本文 H1 相关置信度作废。
+
+### 0B.5 D · 文首裁决
+
+维持 **REWORK**。理由：B/C 是架构层裁决（设计 PASS，进入 §7 契约），但票面问题是「能否重建可替代 proxy 的真值通道」——分层真源把 409 日历史标好了，前向仍全靠 `formula_status=hypothesis` 的模型；在它过 §6.3 / 6.5 / 6.8 / 6.9 之前，交付物不成立。文首行不因本增补改变。
 
 ---
 
@@ -219,6 +321,8 @@ H1 = EMA(H,30) lag1 的残差诊断：|残差| 十分位 [0.05, 0.10, 0.15, 0.20
 | `stated_action` | enum `buy_full\|reduce\|add_back\|clear\|none\|null` | 当帖宣告的动作 |
 | `stated_distance_pct` | number \| null | 「距离通道下轨只有 5 个多点」→ 5 |
 | `anomaly_flags` | string[] | 见 §3.3；空数组 = 正常 |
+| `rail_source` | 常量 `oracle` | （r2）本文件只容 oracle 行；出现其他值 → §6.9 源隔离 fail |
+| `rail_confidence` | enum `explicit\|conflict` | （r2）同日多帖或同帖前后数值不一致 → `conflict`：不采用、不计分、不取均值 |
 | `edited` | bool | 若语料含编辑时间戳且晚于 `sent_at_utc` → true；保留**首版**数值 |
 | `source_text_sha256` | hex | 原帖全文哈希；溯源 |
 | `corpus_snapshot_id` | string | 例 `laomao-agent-distill-20260507` |
@@ -316,6 +420,7 @@ B 的产物是 §3.1 的标签列 + 一份「指标线索清单」（命中原�
 | H3 | 通达信式 `SMA(X,N,M)`（α=M/N） | N, M | 未测；α 扫描最优 0.062 ≈ 2/32，若 M/N 更贴合则替换 H1 |
 | H4 | 双重平滑 `EMA(EMA(X,N),N)` 或 DEMA/TEMA | N | 未测；若 H1 残差呈滞后结构再试 |
 | H5 | `EMA(Close,N) ± k·EMA(H−L,N)` | N, k | 结构等价 H1 的推广，只在 H1 偏差呈对称形态时试 |
+| H6（r2，OpenClaw S39） | `mid=EMA(Close,N)`，`rails=mid×(1±k)` | N=34, k=0.018958（OpenClaw 值）；族内放开亦报 | **已测**：0.46–0.55%，宽度残差 0.79%，族内最佳 0.47%（§0B.1）；中轨对、宽度错；保留为对照候选 |
 | H0 | 分段线性平行通道（§4.2 切段 + 段内 OLS） | 段数不限；**每段轨距自由** | §1.4，预期不过 |
 | H0-TV | TV Parallel Channel 机械化（§0A.2 裁决 3(a)：钉死 pivot 锚点规则，仅新 pivot 确认时重画） | pivot 左右确认根数（事先钉死，只允许 1 组） | 未测；申请方先验，预期不过；**不得因是零模型而放宽阈值** |
 | 不列 | TV Linear Regression Channel | — | 整通道随窗口整体重算的位移在真值中未见；轨距 = k·σ 不随价位线性；不作候选、不作对照 |
@@ -411,6 +516,10 @@ B 的产物是 §3.1 的标签列 + 一份「指标线索清单」（命中原�
 
 未通过 §6.8 的 replica 不得进入 §6.6 Layer 2；§6.8 与 §6.3 / §6.5 任一不达即 fail，不得以「TV 数据源与本地不同」为由放宽。
 
+### 6.9 分层真源硬验收（r2 新增）
+
+正文见 §0B.4「硬验收」表：源隔离、冲突处理、自评守卫、边界跳变 ≤0.30%、fail-closed 三注入、一日一源、禁止事项。§6.9 与 §6.1–6.8 叠加生效；`formula_status` 每次升级都须重跑 §6.9 全表。
+
 ---
 
 ## 7. 与 proxy 共存契约（交付物 6）
@@ -439,6 +548,12 @@ v2 全部键、顺序、语义不变（r2 I1 契约）。新增：
     "is_proxy": false,
     "replica_of": "laomao_2.0_trend_channel",
     "replica_disclaimer": "Fitted replica (EMA of daily High/Low). Reproduces LaoMao's published rails 2023-03..2025-06 within {fit_rmse_pct}% RMSE; formula NOT author-confirmed.",
+    "rail_source": "model",
+    "rail_confidence": "derived|none",
+    "formula_status": "replica_shadow|replica|author_confirmed",
+    "source_transition": false,
+    "system_signal_eligible": false,
+    "signal_gate_ref": null,
     "method": "ema_high_low",
     "params": { "n": 30, "alpha": 0.0645, "alignment": "prior_bars_only|live_partial_bar", "venue_set": ["..."], "grace_min": 10 },
     "params_version": "ema_hl-30-prior-binance_okx_bitstamp_coinbase-<sha8>",
@@ -459,7 +574,7 @@ v2 全部键、顺序、语义不变（r2 I1 契约）。新增：
 }
 ```
 
-规则：`fit_*` 与 `params_version` 为常量镶入，来源只能是过闸的 fit report；`bars_missing` 非空 → `fail` 且轨位 null（EMA 不得跨缺日递推）；两块 `status` 互相独立；history 每行同时含两块。
+规则：`fit_*` 与 `params_version` 为常量镶入，来源只能是过闸的 fit report；`bars_missing` 非空 → `fail` 且轨位 null（EMA 不得跨缺日递推）；两块 `status` 互相独立；history 每行同时含两块。（r2）`formula_status=hypothesis` 时**整块不得出现**在 JSON 与 history；`system_signal_eligible` 与 `signal_gate_ref` 为常量 `false` / `null`，任何写入其他值的路径须使进程非 0 退出（§0B.4 fail-closed 注入 iii）。
 
 ### 7.3 brief：何时可换行
 
@@ -499,6 +614,11 @@ replica 固定行模板（预定，r3 可改字不可改槽）：
 | （r1）较像 TV Parallel Channel | 段内恒斜率、恒轨距两条假设均被数据否定 | **不成立**；机械化为 H0-TV 必跑必报 |
 | （r1）不像 TV Linear Regression Channel（因重绘） | 真值确非回归通道，但「逐 bar 重算」恰是真值的特征 | 结论对、理由反；不列为候选也不列为对照 |
 | （r1）徐小明通达信通道 ≠ 已核实 TV 脚本 | 与裁决无关 | 不需要核实；数据已选出模型族 |
+| （r2）oracle 优先，日报只是搬运老猫自己的数 | 与 §3 真值序列同构 | **正确，采纳**；加 provenance / 异常打标 / 作者标签 / 冲突不取均值（B1–B2） |
+| （r2）S39 `ema_percent_envelope`：EMA34 中轨 ×(1±0.018958) | 409 日碰撞：RMSE 0.46–0.55%，宽度残差 0.79%，2023-H2 太宽 +0.71 pt、2024-H1 太窄 −0.46 pt | **中轨对、宽度错**；k 是同语料宽度中位的一半，非独立证据；改 `EMA(H)/EMA(L)` 后宽度残差 0.12% |
+| （r2）`formula_status="hypothesis"` 明确非终版 | 方向对 | **采纳并加严为四级梯子**；hypothesis 不触达读者（B4） |
+| （r2）S40/S41 置信不足 fail-closed | 方向对；转述未给判据 | **采纳并写死三处**（数据 / 状态 / 信号层，B5）+ 三项注入测试（§6.9） |
+| （r2）填补模型可含分段平行通道 | 只能以 H0-TV 机械化形式参赛 | 人工锚点版**不可 fail-closed**，不准入（B3） |
 
 ---
 
@@ -518,6 +638,10 @@ replica 固定行模板（预定，r3 可改字不可改槽）：
 | （r1）「分段斜率 + 可变轨距」只是下限 | 0.90 | 全语料 H0 以平均段长 ≥15 帖达到位置一致率 ≥97% 且残差曲率窗口占比 <30% |
 | （r1）148d 为最大断档 | 0.97 | `laomao-posts.jsonl` 中存在 2024-08..11 的主讲人轨位帖（corpus-summary 未计入） |
 | （r1）H1 可在 TV 两行复现 | 0.85 | §6.8 中 TV 值与本地 replica 差 >0.02%（同 symbol 同 N 预热 ≥300 根）→ 说明 EMA 定义或 bar 对齐有别，回 §2.4 第 1 步 |
+| （r2）分层真源采纳 | 0.92 | 全语料 §6.1 后 `conflict` 行 >5% → oracle 层本身不可靠，需先解决抽取而非分层 |
+| （r2）S39 宽度模型错、H1 压制 S39 | 0.90 | 用全语料 + 老猫所用交易所 + 半根 bar 对齐后，S39 族（N、k 放开）pooled RMSE ≤ H1 的 1.1 倍 **且** 宽度残差 ≤0.30% → 两族并列，§5.3 重排 |
+| （r2）hypothesis 不得触达读者 | 0.85 | 原则方裁定 brief 可写带 `hypothesis` 标签的通道行 → §0B.3 B4 降为「可写、必标、仍禁 system_signal」，其余不变 |
+| （r2）文首维持 REWORK | 0.90 | 原则方裁定「分层真源架构落地」即票面交付 → 文首改 PASS，但 §6 全部门槛转为 IMPL-GATE r3 的入场条件，一条不减 |
 
 ---
 
